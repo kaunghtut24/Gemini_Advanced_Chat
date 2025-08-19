@@ -5,10 +5,8 @@ import { Message, Role } from '../types';
 // This is automatically configured in Vite using .env.local file.
 const apiKey = import.meta.env.VITE_API_KEY;
 
-// Debug: Check if API key is loaded (remove this in production)
 if (!apiKey) {
-  console.error('VITE_API_KEY is not set. Please check your .env.local file.');
-  console.log('Available env vars:', import.meta.env);
+  throw new Error('VITE_API_KEY environment variable is not set. Please check your .env.local file.');
 }
 
 const ai = new GoogleGenAI({ apiKey });

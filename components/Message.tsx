@@ -2,18 +2,98 @@ import React, { useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Role, Source } from '../types';
-import { BotIcon, UserIcon } from './Icons';
+import { BotIcon, UserIcon, CopyIcon } from './Icons';
 
 interface MessageProps {
   role: Role;
   content: string;
   sources?: Source[];
+  messageIndex?: number;
 }
 
-export const Message: React.FC<MessageProps> = ({ role, content, sources }) => {
+export const Message: React.FC<MessageProps> = ({ role, content, sources, messageIndex = 0 }) => {
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   const parsedContent = role === Role.ASSISTANT ? DOMPurify.sanitize(marked.parse(content) as string) : null;
+
+  // Function to convert markdown content to plain text suitable for word processors
+  const convertToPlainText = (markdownContent: string): string => {
+    // Convert markdown to a more readable plain text format
+    let plainText = markdownContent
+      // Convert headers with proper spacing
+      .replace(/^#{6}\s+(.+)$/gm, '$1\n')
+      .replace(/^#{5}\s+(.+)$/gm, '$1\n')
+      .replace(/^#{4}\s+(.+)$/gm, '$1\n')
+      .replace(/^#{3}\s+(.+)$/gm, '$1\n')
+      .replace(/^#{2}\s+(.+)$/gm, '$1\n\n')
+      .replace(/^#{1}\s+(.+)$/gm, '$1\n\n')
+      // Convert bold/italic (preserve some emphasis with CAPS for bold)
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/_(.+?)_/g, '$1')
+      // Convert unordered lists
+      .replace(/^\s*[-*+]\s+(.+)$/gm, '• $1')
+      // Convert ordered lists 
+      .replace(/^\s*(\d+)\.\s+(.+)$/gm, '$1. $2')
+      // Convert code blocks with clear delimiters
+      .replace(/```[\w]*\n?([\s\S]*?)```/g, (match, code) => {
+        return '\n--- CODE START ---\n' + code.trim() + '\n--- CODE END ---\n';
+      })
+      // Convert inline code
+      .replace(/`([^`]+)`/g, '$1')
+      // Convert blockquotes
+      .replace(/^>\s*(.+)$/gm, '"$1"')
+      // Convert horizontal rules
+      .replace(/^---+$/gm, '---')
+      // Convert line breaks properly
+      .replace(/\n{3,}/g, '\n\n')
+      // Clean up whitespace
+      .trim();
+
+    return plainText;
+  };
+
+  const copyResponse = async () => {
+    try {
+      let textToCopy = convertToPlainText(content);
+      
+      // Add sources if available
+      if (sources && sources.length > 0) {
+        textToCopy += '\n\nSources:\n';
+        sources.forEach((source, index) => {
+          textToCopy += `${index + 1}. ${source.title || 'Source'}: ${source.uri}\n`;
+        });
+      }
+
+      await navigator.clipboard.writeText(textToCopy);
+      
+      // Show feedback
+      const buttonId = `copy-response-${messageIndex}`;
+      const button = document.getElementById(buttonId) as HTMLButtonElement;
+      if (button) {
+        const originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.style.backgroundColor = '#10b981';
+        button.style.color = 'white';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.style.backgroundColor = '';
+          button.style.color = '';
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy response: ', err);
+      const buttonId = `copy-response-${messageIndex}`;
+      const button = document.getElementById(buttonId) as HTMLButtonElement;
+      if (button) {
+        button.textContent = 'Error';
+        setTimeout(() => {
+          button.textContent = 'Copy Response';
+        }, 2000);
+      }
+    }
+  };
 
   useEffect(() => {
     if (parsedContent && bubbleRef.current) {
@@ -70,6 +150,19 @@ export const Message: React.FC<MessageProps> = ({ role, content, sources }) => {
             content
           )}
         </div>
+        {role === Role.ASSISTANT && content && (
+          <div className="message-actions">
+            <button 
+              id={`copy-response-${messageIndex}`}
+              className="copy-response-btn"
+              onClick={copyResponse}
+              title="Copy response to clipboard (formatted for word processors)"
+            >
+              <CopyIcon />
+              Copy Response
+            </button>
+          </div>
+        )}
         {sources && sources.length > 0 && (
           <div className="sources-container">
             <strong>Sources:</strong>

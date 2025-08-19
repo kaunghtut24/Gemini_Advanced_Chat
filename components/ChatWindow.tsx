@@ -230,7 +230,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
     <div className="chat-window">
       <div className="history">
         {messages.map((m, i) => (
-          <MessageComponent key={i} role={m.role} content={m.content} sources={m.sources} />
+          <MessageComponent key={i} role={m.role} content={m.content} sources={m.sources} messageIndex={i} />
         ))}
         {showSpinner && (
           <div className="message assistant">

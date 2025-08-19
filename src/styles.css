@@ -422,6 +422,59 @@ main {
     text-decoration: underline;
 }
 
+/* ---- MESSAGE ACTIONS ------------------------------------------ */
+.message-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.message:hover .message-actions {
+    opacity: 1;
+}
+
+.copy-response-btn {
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.copy-response-btn:hover {
+    background: var(--background-primary);
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.copy-response-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* Make copy button always visible on mobile */
+@media (max-width: 768px) {
+    .message-actions {
+        opacity: 1;
+    }
+    
+    .copy-response-btn {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem;
+    }
+}
+
 
 /* ---- SPINNER (typing indicator) -------------------------------- */
 .spinner {
