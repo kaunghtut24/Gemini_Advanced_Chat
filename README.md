@@ -73,6 +73,7 @@ Follow these instructions to get a copy of the project up and running on your lo
     ```
     VITE_API_KEY=your_gemini_api_key_here
     ```
+    **Important:** The variable name must be `VITE_API_KEY` (not `GEMINI_API_KEY` or `API_KEY`) for Vite to recognize it.
 
 ### Running the Application
 
@@ -113,9 +114,16 @@ The application is configured to use `gemini-2.5-flash` by default, which provid
 
 1. **File Upload Errors:** Ensure you're uploading supported file formats. The application will show a warning for unsupported files.
 
-2. **API Key Issues:** Make sure your API key is correctly set in the `.env.local` file and that it has the necessary permissions.
+2. **API Key Issues:** 
+   - Make sure your API key is correctly set in the `.env.local` file
+   - Verify the variable name is `VITE_API_KEY` (not `GEMINI_API_KEY` or `API_KEY`)
+   - Restart the development server after changing environment variables
+   - Check browser console for error messages like "An API Key must be set when running in a browser"
+   - Ensure your API key has the necessary permissions from Google AI Studio
 
 3. **React Warnings:** This version has been optimized to eliminate common React warnings like "setState during render" and "hooks order violations."
+
+4. **Development Server Issues:** If you encounter CORS or loading issues, make sure to run `npm run dev` and access the app at `http://localhost:5173`
 
 ## 📄 License
 

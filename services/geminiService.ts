@@ -3,7 +3,15 @@ import { Message, Role } from '../types';
 
 // The API key is provided via the `import.meta.env.VITE_API_KEY` environment variable.
 // This is automatically configured in Vite using .env.local file.
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+const apiKey = import.meta.env.VITE_API_KEY;
+
+// Debug: Check if API key is loaded (remove this in production)
+if (!apiKey) {
+  console.error('VITE_API_KEY is not set. Please check your .env.local file.');
+  console.log('Available env vars:', import.meta.env);
+}
+
+const ai = new GoogleGenAI({ apiKey });
 
 /**
  * Converts a File object to a GoogleGenerativeAI.Part object.
