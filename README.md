@@ -11,6 +11,7 @@ A responsive and advanced chat application that connects to the Google Gemini AP
 -   **File Type Validation:** Automatic validation ensures only supported file formats are uploaded.
 -   **Web Search:** Toggle on "Search the web" to get answers grounded in up-to-date information from Google Search.
 -   **Source Citing:** Responses generated with web search include links to the sources, so you can verify the information.
+-   **Copy Response:** Copy AI responses with proper formatting for word processors - converts markdown to readable plain text while preserving structure.
 
 ### Advanced Session Management
 -   **Persistent Chat History:** Conversations are automatically saved to your browser's local storage.
@@ -29,6 +30,7 @@ The application validates and supports the following file formats for upload:
 -   **Modern UI:** Clean, beautiful, and fully responsive chat interface that looks great on any device.
 -   **"Thinking" Indicator:** A subtle animation shows when the AI is generating a response.
 -   **Auto-growing Textarea:** The message input box expands as you type for a seamless user experience.
+-   **Copy Functions:** Copy individual code blocks or entire responses formatted for word processors.
 -   **Error Handling:** Comprehensive error messages with helpful guidance for different error scenarios.
 -   **Favicon Support:** Includes proper favicon configuration for better browser integration.
 
