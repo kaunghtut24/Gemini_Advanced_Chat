@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Advanced Chat UI",
+  "description": "A responsive and advanced chat application that connects to the Gemini API for streaming conversations. Features a clean, modern interface built with React, TypeScript, and Tailwind CSS.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
