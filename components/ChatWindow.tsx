@@ -4,13 +4,79 @@ import { Message, Role } from '../types';
 import { generateResponseStream } from '../services/geminiService';
 import { PaperclipIcon } from './Icons';
 
+const chatTemplates = [
+  { 
+    id: 1, 
+    label: "📝 Writing Assistant", 
+    content: "Help me write a professional email/document about [topic]. Please make it clear, concise, and appropriate for [audience]." 
+  },
+  { 
+    id: 2, 
+    label: "🧠 Explain Complex Topic", 
+    content: "Explain [complex topic] in simple terms that a beginner can understand. Use analogies and examples to make it clear." 
+  },
+  { 
+    id: 3, 
+    label: "💡 Brainstorm Ideas", 
+    content: "I need creative ideas for [project/problem]. Please suggest at least 5 innovative approaches with brief explanations for each." 
+  },
+  { 
+    id: 4, 
+    label: "🔍 Research & Analysis", 
+    content: "Research and analyze [topic]. Provide key insights, current trends, and important considerations I should know about." 
+  },
+  { 
+    id: 5, 
+    label: "🛠️ Problem Solving", 
+    content: "I'm facing this challenge: [describe problem]. Help me break it down and suggest step-by-step solutions." 
+  },
+  { 
+    id: 6, 
+    label: "📚 Learn Something New", 
+    content: "I want to learn about [topic]. Create a beginner-friendly learning plan with key concepts and recommended resources." 
+  },
+  { 
+    id: 7, 
+    label: "💼 Career Advice", 
+    content: "I need career guidance about [specific situation]. Please provide actionable advice and next steps." 
+  },
+  { 
+    id: 8, 
+    label: "🎯 Goal Planning", 
+    content: "Help me create a detailed plan to achieve [specific goal]. Include milestones, timeline, and potential obstacles to consider." 
+  },
+  { 
+    id: 9, 
+    label: "🔧 Technical Help", 
+    content: "I need help with [technical issue/task]. Please provide step-by-step instructions and explain any technical terms." 
+  },
+  { 
+    id: 10, 
+    label: "📊 Data Analysis", 
+    content: "Analyze this data/information: [paste data]. What insights, patterns, or recommendations can you provide?" 
+  },
+  { 
+    id: 11, 
+    label: "🎨 Creative Writing", 
+    content: "Help me write a creative piece about [theme/topic]. Make it engaging and include vivid descriptions." 
+  },
+  { 
+    id: 12, 
+    label: "🤔 Decision Making", 
+    content: "I need to decide between [options]. Help me weigh the pros and cons and suggest the best choice based on [criteria]." 
+  }
+];
+
 interface ChatWindowProps {
     sessionMessages: Message[];
     onMessagesUpdate: (messages: Message[]) => void;
+    currentModel?: string;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessagesUpdate }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessagesUpdate, currentModel }) => {
   const [messages, setMessages] = useState<Message[]>(sessionMessages);
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>(sessionMessages);
+  const [searchQuery, setSearchQuery] = useState("");
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
@@ -26,9 +92,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
   // Update local state when sessionMessages prop changes
   useEffect(() => {
     setMessages(sessionMessages);
+    setFilteredMessages(sessionMessages);
   }, [sessionMessages]);
 
-  // Handle updates to parent component
+  // Handle search filtering
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredMessages(messages);
+    } else {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      setFilteredMessages(
+        messages.filter((message) =>
+          message.content.toLowerCase().includes(lowerCaseQuery)
+        )
+      );
+    }
+  }, [searchQuery, messages]);
+
+  // Handle updates to parent component with proper debouncing
   useEffect(() => {
     if (pendingUpdateRef.current) {
       const messagesToUpdate = pendingUpdateRef.current;
@@ -41,16 +122,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
         }
         updateTimeoutRef.current = setTimeout(() => {
           onMessagesUpdate(messagesToUpdate);
-        }, 100);
+        }, 150);
       } else {
-        // Immediate update for non-streaming
+        // Immediate update for non-streaming, but clear any pending timeouts first
         if (updateTimeoutRef.current) {
           clearTimeout(updateTimeoutRef.current);
+          updateTimeoutRef.current = null;
         }
         onMessagesUpdate(messagesToUpdate);
       }
     }
-  }, [messages, onMessagesUpdate]);
+  }, [onMessagesUpdate]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -99,13 +181,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
           const updatedMessages = [...prev];
           const lastMessage = updatedMessages[updatedMessages.length - 1];
 
-          if (lastMessage) {
-            if (chunk.text) {
-              lastMessage.content += chunk.text;
+          if (lastMessage && lastMessage.role === Role.ASSISTANT) {
+            if (chunk.text && chunk.text.trim()) {
+              // Prevent duplicate content by checking if this chunk was already added
+              const chunkText = chunk.text;
+              if (!lastMessage.content.endsWith(chunkText)) {
+                lastMessage.content += chunkText;
+              }
             }
             if (chunk.sources) {
               // Simple merge and dedupe sources by uri
-              const existingUris = new Set(lastMessage.sources?.map(s => s.uri));
+              const existingUris = new Set(lastMessage.sources?.map(s => s.uri) || []);
               const newSources = chunk.sources.filter(s => !existingUris.has(s.uri));
               lastMessage.sources = [...(lastMessage.sources || []), ...newSources];
             }
@@ -118,12 +204,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
         });
       }
       
-      // Final update after streaming is complete
-      setMessages(prev => {
-        pendingUpdateRef.current = prev;
-        isStreamingUpdateRef.current = false;
-        return prev;
-      });
+      // Final update after streaming is complete - just change the streaming flag
+      isStreamingUpdateRef.current = false;
+      
     } catch (error) {
       console.error("Error streaming response:", error);
       setMessages(prev => {
@@ -132,17 +215,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
         if (lastMessage && lastMessage.role === Role.ASSISTANT) {
           // Provide more helpful error messages based on the error type
           if (error instanceof Error) {
+            console.error("Detailed error:", error);
+            
             if (error.message.includes('Unsupported file type') || error.message.includes('Unsupported MIME type')) {
               lastMessage.content = "⚠️ One or more files you uploaded are not supported. Please use supported formats: Images (JPEG, PNG, WebP, HEIC, HEIF), PDF documents, Audio (WAV, MP3, AIFF, AAC, OGG, FLAC), or Video (MP4, MPEG, MOV, AVI, FLV, MPG, WEBM, WMV, 3GPP).";
             } else if (error.message.includes('API key')) {
-              lastMessage.content = "⚠️ API key issue. Please check your Gemini API key configuration.";
+              lastMessage.content = "⚠️ API key issue. Please check your Gemini API key configuration in the settings.";
             } else if (error.message.includes('quota') || error.message.includes('limit')) {
-              lastMessage.content = "⚠️ API quota exceeded. Please try again later.";
+              lastMessage.content = "⚠️ API quota exceeded. Please try again later or switch to a different model.";
+            } else if (error.message.includes('model') && error.message.includes('not found')) {
+              lastMessage.content = `⚠️ The selected model "${currentModel || 'Unknown'}" is not available. Please try switching to a different model like "gemini-2.5-flash".`;
+            } else if (error.message.includes('permission') || error.message.includes('access')) {
+              lastMessage.content = `⚠️ Access denied for model "${currentModel || 'Unknown'}". Your API key might not have access to this model. Try "gemini-2.5-flash" instead.`;
+            } else if (error.message.includes('rate')) {
+              lastMessage.content = `⚠️ Rate limit exceeded for model "${currentModel || 'Unknown'}". Please wait a moment before trying again.`;
             } else {
-              lastMessage.content = `⚠️ An error occurred: ${error.message}`;
+              lastMessage.content = `⚠️ Error with model "${currentModel || 'Unknown'}": ${error.message}`;
             }
           } else {
-            lastMessage.content = "⚠️ An unexpected error occurred. Please try again.";
+            lastMessage.content = "⚠️ An unexpected error occurred. Please try again or switch to a different model.";
           }
         }
         // Schedule immediate update for error message
@@ -226,10 +317,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
   
   const showSpinner = isStreaming && messages.length > 0 && messages[messages.length - 1].content === '';
 
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleTemplateSelect = (templateContent: string) => {
+    setInput(templateContent);
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="chat-window">
+      <div className="chat-controls">
+        <div className="search-bar">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="🔍 Search messages..."
+            className="search-input"
+          />
+        </div>
+        {currentModel && (
+          <div className="model-indicator">
+            <span className="model-label">Model:</span>
+            <span className="model-name">{currentModel}</span>
+          </div>
+        )}
+        <div className="template-dropdown">
+          <select
+            onChange={(e) => handleTemplateSelect(e.target.value)}
+            defaultValue=""
+            className="template-select"
+          >
+            <option value="" disabled>� Choose a prompt template...</option>
+            {chatTemplates.map((template) => (
+              <option key={template.id} value={template.content}>
+                {template.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      
       <div className="history">
-        {messages.map((m, i) => (
+        {filteredMessages.map((m, i) => (
           <MessageComponent key={i} role={m.role} content={m.content} sources={m.sources} messageIndex={i} />
         ))}
         {showSpinner && (
