@@ -342,6 +342,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
           <div className="model-indicator">
             <span className="model-label">Model:</span>
             <span className="model-name">{currentModel}</span>
+            <div className="context-indicator" title="Context is maintained throughout the conversation">
+              <span className="context-icon">🧠</span>
+              <span className="context-text">Context Aware</span>
+            </div>
           </div>
         )}
         <div className="template-dropdown">
