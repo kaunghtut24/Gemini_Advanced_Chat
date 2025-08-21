@@ -105,6 +105,8 @@ The repository now includes a complete Docker setup for containerized deployment
    - Deploy using platform-specific instructions
    - Set `VITE_API_KEY` environment variable during build
 
+**Note**: The Docker configuration is provided for reference. Some environments may require adjustments to the build process.
+
 ## Railway Deployment (NEW)
 
 1. **Connect your GitHub repository** to Railway
