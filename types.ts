@@ -20,3 +20,28 @@ export interface ChatSession {
   messages: Message[];
   createdAt: number;
 }
+
+// Authentication types
+export interface AuthState {
+  isAuthenticated: boolean;
+  email: string | null;
+  token: string | null;
+  expiresAt: number | null;
+}
+
+export interface LoginCodeRequest {
+  email: string;
+}
+
+export interface LoginCodeVerification {
+  email: string;
+  code: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message: string;
+  token?: string;
+  email?: string;
+  expiresAt?: number;
+}

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChatWindow } from './components/ChatWindow';
 import { Sidebar } from './components/Sidebar';
+import { Login } from './components/Login';
 import { useChatHistory } from './hooks/useChatHistory';
+import { useAuth } from './hooks/useAuth';
 import { generateTitle, setSelectedModel } from './services/geminiService';
 import { testAllModels, runComprehensiveTest } from './utils/modelTester';
 import { runContextTests } from './utils/contextTester';
@@ -9,10 +11,12 @@ import { runImportExportTests, testImportCompatibility } from './utils/importExp
 import { backupSessions, saveSessionForRecovery, getSessionStats } from './utils/sessionRecovery';
 import { debugExportState, logSessionDetails } from './utils/debugExport';
 import { Message, Role, ChatSession } from './types';
+import { Icons } from './components/Icons';
 import './src/styles.css';
 import Settings from './components/Settings';
 
 const App: React.FC = () => {
+  const { isAuthenticated, userEmail, logout } = useAuth();
   const { 
     sessions, 
     createNewSession, 
@@ -27,6 +31,7 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState(import.meta.env.VITE_API_KEY || '');
   const [showSettings, setShowSettings] = useState(false);
   const [currentModel, setCurrentModel] = useState('gemini-2.5-flash');
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Helper function to check if a session has meaningful conversation
   const hasMeaningfulConversation = (session: ChatSession | null): boolean => {
@@ -323,7 +328,9 @@ const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      {showSettings ? (
+      {!isAuthenticated ? (
+        <Login />
+      ) : showSettings ? (
         <Settings apiKey={apiKey} onApiKeyChange={setApiKey} onClose={() => setShowSettings(false)} />
       ) : (
         <>
@@ -351,6 +358,31 @@ const App: React.FC = () => {
                   ☰
                 </button>
                 <h1>🚀 Gemini Advanced Chat</h1>
+              </div>
+              <div className="header-right">
+                <div className="user-menu">
+                  <button 
+                    className="user-button" 
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                  >
+                    <span className="user-email">{userEmail}</span>
+                    <Icons.LogOut />
+                  </button>
+                  {showUserMenu && (
+                    <div className="user-dropdown">
+                      <button 
+                        className="dropdown-item danger" 
+                        onClick={() => {
+                          logout();
+                          setShowUserMenu(false);
+                        }}
+                      >
+                        <Icons.LogOut />
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="subtitle">
                 Powered by <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">Google Gemini API</a>
