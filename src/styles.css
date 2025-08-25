@@ -567,6 +567,20 @@ main {
   white-space: nowrap;
 }
 
+.context-warning {
+  font-size: 0.7rem;
+  color: #f59e0b;
+  cursor: help;
+  margin-left: 0.25rem;
+}
+
+.imported-indicator {
+  font-size: 0.7rem;
+  color: #3b82f6;
+  cursor: help;
+  margin-left: 0.25rem;
+}
+
 /* Context Indicator Responsive Styles */
 @media (max-width: 768px) {
   .context-indicator {
@@ -1694,7 +1708,6 @@ body.sidebar-open .sidebar {
     line-height: 1.4 !important;
     padding: 0.75rem !important;
   }
-}
 
 /* Extra Small Mobile Styles (360px and below) */
 @media (max-width: 360px) {

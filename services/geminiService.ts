@@ -87,6 +87,70 @@ async function fileToGenerativePart(file: File) {
 }
 
 /**
+ * Truncates conversation history to fit within context window limits
+ * @param history The full conversation history
+ * @param maxMessages Maximum number of recent messages to include
+ * @returns Truncated message history
+ */
+function truncateHistory(history: Message[], maxMessages: number = 50): Message[] {
+  // Always keep the first message if it's a system message or greeting
+  if (history.length <= maxMessages) {
+    return history;
+  }
+
+  // Keep the first message (usually a greeting) and the most recent messages
+  const firstMessage = history[0];
+  const recentMessages = history.slice(-(maxMessages - 1));
+  
+  // If first message is just a greeting, we can skip it for context
+  if (firstMessage?.role === Role.ASSISTANT && 
+      firstMessage.content.includes("Hello! How can I help you today?")) {
+    return recentMessages;
+  }
+  
+  return [firstMessage, ...recentMessages];
+}
+
+/**
+ * Estimates the token count for a message (rough approximation)
+ * @param message The message to estimate tokens for
+ * @returns Estimated token count
+ */
+function estimateTokens(message: Message): number {
+  // Rough estimation: ~4 characters per token
+  return Math.ceil(message.content.length / 4);
+}
+
+/**
+ * Intelligently manages context window by keeping important messages
+ * @param history The full conversation history
+ * @param maxTokens Maximum tokens to use for context (model-dependent)
+ * @returns Optimized message history
+ */
+function manageContextWindow(history: Message[], maxTokens: number = 30000): Message[] {
+  if (history.length === 0) return history;
+
+  let totalTokens = 0;
+  const contextHistory: Message[] = [];
+  
+  // Start from the most recent messages and work backwards
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    const messageTokens = estimateTokens(message);
+    
+    if (totalTokens + messageTokens > maxTokens && contextHistory.length > 0) {
+      break;
+    }
+    
+    contextHistory.unshift(message);
+    totalTokens += messageTokens;
+  }
+  
+  console.log(`Context window: Using ${contextHistory.length}/${history.length} messages (~${totalTokens} tokens)`);
+  return contextHistory;
+}
+
+/**
  * Generates a streaming response from the Gemini model.
  * @param history The conversation history.
  * @param prompt The user's text prompt.
@@ -102,21 +166,82 @@ export async function* generateResponseStream(
 ): AsyncGenerator<{ text?: string; sources?: any[] }> {
   const model = selectedModel; // Use the dynamically selected model
 
+  console.log(`🤖 generateResponseStream called with:`);
+  console.log(`📜 History: ${history.length} messages`);
+  console.log(`💬 Prompt: "${prompt}"`);
+  console.log(`📁 Files: ${files.length}`);
+  
+  if (history.length > 0) {
+    console.log(`🧠 History preview:`, history.map(m => ({ role: m.role, content: m.content.substring(0, 50) + '...' })));
+  }
+
   try {
     const fileParts = await Promise.all(files.map(fileToGenerativePart));
 
+    // Determine context window size based on model
+    let maxTokens = 30000; // Default for most models
+    if (model.includes('2.5')) {
+      maxTokens = 100000; // Gemini 2.5 has larger context window
+    } else if (model.includes('1.5')) {
+      maxTokens = 30000; // Gemini 1.5 Pro context window
+    }
+
+    // Manage context window to prevent token limit issues
+    const contextHistory = manageContextWindow(history, maxTokens);
+    
+    console.log(`📊 Context window management:`);
+    console.log(`   Input history: ${history.length} messages`);
+    console.log(`   After context window: ${contextHistory.length} messages`);
+    console.log(`   Max tokens: ${maxTokens}`);
+    
+    if (contextHistory.length > 0) {
+      console.log(`📝 Context history preview:`, contextHistory.map(m => ({ role: m.role, content: m.content.substring(0, 30) + '...' })));
+    }
+
+    // Check if the last message in history is the current user prompt
+    const lastMessage = contextHistory[contextHistory.length - 1];
+    const isLastMessageCurrentPrompt = lastMessage && lastMessage.role === Role.USER && lastMessage.content === prompt;
+
+    console.log(`🔍 Last message check:`);
+    console.log(`   Last message exists: ${!!lastMessage}`);
+    if (lastMessage) {
+      console.log(`   Last message role: ${lastMessage.role}`);
+      console.log(`   Last message content: "${lastMessage.content}"`);
+      console.log(`   Current prompt: "${prompt}"`);
+      console.log(`   Messages match: ${lastMessage.content === prompt}`);
+    }
+    console.log(`   Using integrated history: ${isLastMessageCurrentPrompt}`);
+
     // Construct the conversation history for the API call.
-    const contents = [
-      ...history.map(msg => ({
+    let contents;
+    if (isLastMessageCurrentPrompt) {
+      console.log(`✅ Using integrated history approach`);
+      // If the last message is the current prompt, just use the history as-is
+      contents = contextHistory.map(msg => ({
         role: msg.role === Role.USER ? 'user' : 'model',
         parts: [{ text: msg.content }]
-      })),
-      // Add the new user prompt with text and files.
-      {
-        role: 'user',
-        parts: [{ text: prompt }, ...fileParts]
+      }));
+      
+      // Add files to the last user message if any
+      if (fileParts.length > 0) {
+        const lastContent = contents[contents.length - 1];
+        lastContent.parts = [{ text: lastContent.parts[0].text }, ...fileParts];
       }
-    ];
+    } else {
+      console.log(`⚠️ Using legacy separate prompt approach`);
+      // Legacy behavior: add prompt as separate message
+      contents = [
+        ...contextHistory.map(msg => ({
+          role: msg.role === Role.USER ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        })),
+        // Add the new user prompt with text and files.
+        {
+          role: 'user',
+          parts: [{ text: prompt }, ...fileParts]
+        }
+      ];
+    }
 
     // Configure model-specific settings
     const config: any = {
@@ -131,6 +256,9 @@ export async function* generateResponseStream(
     }
 
     console.log(`Generating response with model: ${model}`);
+    console.log(`📤 Sending ${contents.length} messages to API`);
+    console.log(`🧠 Context: ${contents.filter(c => c.role === 'model').length} assistant messages, ${contents.filter(c => c.role === 'user').length} user messages`);
+    console.log(`📋 Final contents being sent to API:`, contents.map(c => ({ role: c.role, text: c.parts[0]?.text?.substring(0, 30) + '...' })));
     
     const stream = await ai.models.generateContentStream({
       model,

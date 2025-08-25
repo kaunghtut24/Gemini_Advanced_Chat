@@ -14,6 +14,9 @@ export const useChatHistory = () => {
                 // Sort by createdAt descending to show newest first
                 parsedSessions.sort((a: ChatSession, b: ChatSession) => b.createdAt - a.createdAt);
                 setSessions(parsedSessions);
+                console.log(`💾 Loaded ${parsedSessions.length} sessions from localStorage`);
+            } else {
+                console.log('💾 No sessions found in localStorage');
             }
         } catch (error) {
             console.error("Failed to load chat sessions from local storage", error);
@@ -27,6 +30,7 @@ export const useChatHistory = () => {
         setSessions(updatedSessions);
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSessions));
+            console.log(`💾 Saved ${updatedSessions.length} sessions to localStorage`);
         } catch (error) {
             console.error("Failed to save chat sessions to local storage", error);
         }
@@ -39,7 +43,9 @@ export const useChatHistory = () => {
             messages: [{ role: Role.ASSISTANT, content: "Hello! How can I help you today? You can attach files or enable web search." }],
             createdAt: Date.now(),
         };
-        saveSessions([newSession, ...sessions]);
+        const updatedSessions = [newSession, ...sessions];
+        saveSessions(updatedSessions);
+        console.log(`✨ Created new chat session: ${newSession.id} (total sessions: ${updatedSessions.length})`);
         return newSession.id;
     }, [sessions, saveSessions]);
 
@@ -69,7 +75,9 @@ export const useChatHistory = () => {
             messages: sessionData.messages,
             createdAt: Date.now(),
         };
-        saveSessions([newSession, ...sessions]);
+        const updatedSessions = [newSession, ...sessions];
+        saveSessions(updatedSessions);
+        console.log(`📥 Imported session: "${newSession.title}" with ${newSession.messages.length} messages`);
         return newSession.id;
     }, [sessions, saveSessions]);
 

@@ -93,6 +93,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
   useEffect(() => {
     setMessages(sessionMessages);
     setFilteredMessages(sessionMessages);
+    
+    // Log context information for imported sessions
+    if (sessionMessages.length > 1) {
+      const userMessages = sessionMessages.filter(m => m.role === Role.USER);
+      const assistantMessages = sessionMessages.filter(m => m.role === Role.ASSISTANT);
+      console.log(`🧠 Session loaded with ${sessionMessages.length} messages (${userMessages.length} user, ${assistantMessages.length} assistant)`);
+      console.log('Context is ready for follow-up questions');
+    }
   }, [sessionMessages]);
 
   // Handle search filtering
@@ -162,11 +170,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
 
     const userMessage: Message = { role: Role.USER, content: currentInput };
     
-    // Use functional update to get the most recent state
-    let historyForAPI: Message[] = [];
+    // First, calculate the history that will be sent to API
+    const historyForAPI = [...messages, userMessage];
+    
+    // Log context information
+    console.log(`📤 Sending ${historyForAPI.length} messages to API for context`);
+    if (historyForAPI.length > 1) {
+      console.log(`🧠 Context includes conversation history for follow-up questions`);
+    }
+    
+    // Update UI state
     setMessages(prev => {
-        historyForAPI = [...prev];
         const newMessages: Message[] = [...prev, userMessage, { role: Role.ASSISTANT, content: "", sources: [] }];
+        
+        // Add context management info for long conversations
+        if (historyForAPI.length > 50) {
+          console.log(`🧠 Context Management: Using smart context window for conversation with ${historyForAPI.length} messages`);
+        }
+        
         // Schedule update to parent
         pendingUpdateRef.current = newMessages;
         isStreamingUpdateRef.current = false;
@@ -342,9 +363,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
           <div className="model-indicator">
             <span className="model-label">Model:</span>
             <span className="model-name">{currentModel}</span>
-            <div className="context-indicator" title="Context is maintained throughout the conversation">
+            <div className="context-indicator" title="Context is maintained throughout the conversation with intelligent context window management">
               <span className="context-icon">🧠</span>
-              <span className="context-text">Context Aware</span>
+              <span className="context-text">Smart Context</span>
+              {filteredMessages.length > 50 && (
+                <span className="context-warning" title={`Large conversation (${filteredMessages.length} messages). Recent messages prioritized for context.`}>
+                  ⚠️
+                </span>
+              )}
+              {filteredMessages.length > 1 && filteredMessages[0]?.content?.includes("Hello! How can I help you today?") === false && (
+                <span className="imported-indicator" title="This is an imported conversation with full context available">
+                  📥
+                </span>
+              )}
             </div>
           </div>
         )}
