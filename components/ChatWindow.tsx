@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Message as MessageComponent } from './Message';
 import { Message, Role } from '../types';
-import { generateResponseStream } from '../services/geminiService';
+import { generateResponseStream, generateTitle } from '../services/geminiService';
 import { PaperclipIcon } from './Icons';
 
 const chatTemplates = [
@@ -71,9 +71,17 @@ interface ChatWindowProps {
     sessionMessages: Message[];
     onMessagesUpdate: (messages: Message[]) => void;
     currentModel?: string;
+    sessionTitle?: string;
+    onTitleUpdate?: (title: string) => void;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessagesUpdate, currentModel }) => {
+export const ChatWindow: React.FC<ChatWindowProps> = ({ 
+  sessionMessages, 
+  onMessagesUpdate, 
+  currentModel, 
+  sessionTitle, 
+  onTitleUpdate 
+}) => {
   const [messages, setMessages] = useState<Message[]>(sessionMessages);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>(sessionMessages);
   const [searchQuery, setSearchQuery] = useState("");
@@ -172,6 +180,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ sessionMessages, onMessa
     
     // First, calculate the history that will be sent to API
     const historyForAPI = [...messages, userMessage];
+    
+    // Auto-title session if this is the first user message and session is still "New Chat"
+    if (sessionTitle === 'New Chat' && onTitleUpdate && messages.filter(m => m.role === Role.USER).length === 0) {
+      // This is the first user message, auto-generate title immediately
+      console.log(`🚀 Triggering immediate auto-title for first message: "${currentInput}"`);
+      generateTitle(currentInput)
+        .then(title => {
+          console.log(`🏷️ Auto-generated title: "${title}"`);
+          onTitleUpdate(title);
+        })
+        .catch(error => {
+          console.error("Failed to generate title:", error);
+          // Fallback title
+          const fallbackTitle = currentInput.substring(0, 40).trim() + '...';
+          console.log(`📝 Using fallback title: "${fallbackTitle}"`);
+          onTitleUpdate(fallbackTitle);
+        });
+    }
     
     // Log context information
     console.log(`📤 Sending ${historyForAPI.length} messages to API for context`);

@@ -7,7 +7,8 @@ import { testAllModels, runComprehensiveTest } from './utils/modelTester';
 import { runContextTests } from './utils/contextTester';
 import { runImportExportTests, testImportCompatibility } from './utils/importExportTester';
 import { backupSessions, saveSessionForRecovery, getSessionStats } from './utils/sessionRecovery';
-import { Message, Role } from './types';
+import { debugExportState, logSessionDetails } from './utils/debugExport';
+import { Message, Role, ChatSession } from './types';
 import './src/styles.css';
 import Settings from './components/Settings';
 
@@ -26,6 +27,16 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState(import.meta.env.VITE_API_KEY || '');
   const [showSettings, setShowSettings] = useState(false);
   const [currentModel, setCurrentModel] = useState('gemini-2.5-flash');
+
+  // Helper function to check if a session has meaningful conversation
+  const hasMeaningfulConversation = (session: ChatSession | null): boolean => {
+    if (!session || session.messages.length <= 1) return false;
+    
+    const userMessages = session.messages.filter(m => m.role === Role.USER);
+    const assistantMessages = session.messages.filter(m => m.role === Role.ASSISTANT && m.content.trim() !== '');
+    
+    return userMessages.length > 0 && assistantMessages.length > 0;
+  };
 
   useEffect(() => {
     // Make model testing functions available globally for console access
@@ -114,54 +125,66 @@ const App: React.FC = () => {
       console.log(`📝 Messages being saved:`, newMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) + '...' })));
 
       updateSessionMessages(activeSession.id, newMessages);
-
-      if (activeSession.title === 'New Chat' && newMessages.length === 2 && newMessages[1].role === Role.USER) {
-          const userPrompt = newMessages[1].content;
-          try {
-              const title = await generateTitle(userPrompt);
-              renameSession(activeSession.id, title);
-          } catch(error) {
-              console.error("Failed to generate title:", error);
-              renameSession(activeSession.id, userPrompt.substring(0, 40) + '...');
-          }
-      }
-  }, [activeSession, renameSession, updateSessionMessages]);
+  }, [activeSession, updateSessionMessages]);
 
   const handleExportChat = () => {
     if (!activeSession) return;
     
-    // Enhanced export format with metadata for better import compatibility
-    const exportData = {
-      version: "1.0",
-      exportedAt: new Date().toISOString(),
-      title: activeSession.title,
-      id: activeSession.id,
-      createdAt: activeSession.createdAt,
-      messages: activeSession.messages,
-      totalMessages: activeSession.messages.length,
-      // Add context validation
-      contextInfo: {
-        hasUserMessages: activeSession.messages.some(m => m.role === Role.USER),
-        hasAssistantMessages: activeSession.messages.some(m => m.role === Role.ASSISTANT),
-        conversationStarted: activeSession.messages.length > 1
+    // Debug current state before export
+    console.log('🔍 Pre-export state check:');
+    const debugInfo = debugExportState(activeSessionId, sessions, activeSession);
+    
+    // Use a timeout to ensure we get the latest session state after any pending updates
+    setTimeout(() => {
+      // Get the most up-to-date session from the sessions array
+      const currentSession = sessions.find(s => s.id === activeSessionId);
+      if (!currentSession) {
+        console.error('No current session found for export');
+        return;
       }
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    
-    // Better filename with timestamp
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
-    link.download = `gemini-chat-${activeSession.title.replace(/[^a-zA-Z0-9]/g, '_')}-${timestamp}.json`;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    console.log(`📤 Exported chat: "${activeSession.title}" with ${activeSession.messages.length} messages`);
+      
+      console.log(`📤 Exporting session "${currentSession.title}" with ${currentSession.messages.length} messages`);
+      logSessionDetails(currentSession);
+      
+      // Enhanced export format with metadata for better import compatibility
+      const exportData = {
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        title: currentSession.title,
+        id: currentSession.id,
+        createdAt: currentSession.createdAt,
+        messages: currentSession.messages,
+        totalMessages: currentSession.messages.length,
+        // Add context validation
+        contextInfo: {
+          hasUserMessages: currentSession.messages.some(m => m.role === Role.USER),
+          hasAssistantMessages: currentSession.messages.some(m => m.role === Role.ASSISTANT),
+          conversationStarted: currentSession.messages.length > 1
+        },
+        // Add debug info to export for troubleshooting
+        debugInfo: {
+          exportTime: new Date().toISOString(),
+          stateConsistency: debugInfo.stateConsistency,
+          sessionsCount: sessions.length
+        }
+      };
+      
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      
+      // Better filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+      link.download = `gemini-chat-${currentSession.title.replace(/[^a-zA-Z0-9]/g, '_')}-${timestamp}.json`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log(`📤 Exported chat: "${currentSession.title}" with ${currentSession.messages.length} messages`);
+    }, 100); // Small delay to ensure state is synchronized
   };
   
   const handleImportChat = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,15 +231,16 @@ const App: React.FC = () => {
                   return;
               }
               
-              // Check if current session has unsaved changes
+              // Check if current session has meaningful conversation that should be preserved
               const currentSession = activeSession;
               const hasUnsavedChanges = currentSession && 
                   currentSession.messages.length > 1 && // More than just the greeting
-                  currentSession.title !== 'New Chat';
+                  hasMeaningfulConversation(currentSession); // Has actual conversation content
               
               if (hasUnsavedChanges) {
+                  const sessionTitle = currentSession.title === 'New Chat' ? 'Untitled conversation' : currentSession.title;
                   const shouldProceed = confirm(
-                      `You have an active chat session "${currentSession.title}" with ${currentSession.messages.length} messages. ` +
+                      `You have an active chat session "${sessionTitle}" with ${currentSession.messages.length} messages. ` +
                       'Importing will switch to the new chat session. The current session will remain saved. Continue?'
                   );
                   if (!shouldProceed) {
@@ -339,6 +363,8 @@ const App: React.FC = () => {
                   sessionMessages={activeSession.messages}
                   onMessagesUpdate={handleUpdateMessages}
                   currentModel={currentModel}
+                  sessionTitle={activeSession.title}
+                  onTitleUpdate={(title) => renameSession(activeSession.id, title)}
                 />
               ) : (
                  <div className="no-chat-selected">
