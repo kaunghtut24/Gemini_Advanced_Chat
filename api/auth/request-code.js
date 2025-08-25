@@ -5,34 +5,55 @@
 
 import nodemailer from 'nodemailer';
 
-// Since Vercel functions are stateless, we'll use a simple approach
-// For production, you'd want to use Redis, database, or external storage
-const tempStorage = new Map();
-
 // Get authorized emails from environment variables
 const getAuthorizedEmails = () => {
   const emails = process.env.AUTHORIZED_EMAILS;
+  console.log('🔍 Raw AUTHORIZED_EMAILS:', emails);
+  
   if (!emails) {
     console.warn('⚠️ No AUTHORIZED_EMAILS found in environment variables');
     return [];
   }
-  return emails.split(',').map(email => email.trim().toLowerCase());
+  
+  const emailList = emails.split(',').map(email => email.trim().toLowerCase());
+  console.log('📧 Parsed authorized emails:', emailList);
+  return emailList;
 };
 
 // Configure email transporter
 const createEmailTransporter = () => {
+  console.log('📧 Email config check:', {
+    SERVICE: !!process.env.EMAIL_SERVICE,
+    USER: !!process.env.EMAIL_USER,
+    PASS: !!process.env.EMAIL_PASS,
+    SERVICE_VALUE: process.env.EMAIL_SERVICE
+  });
+
   if (!process.env.EMAIL_SERVICE || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.error('❌ Email configuration missing in environment variables');
+    console.error('Missing:', {
+      EMAIL_SERVICE: !process.env.EMAIL_SERVICE,
+      EMAIL_USER: !process.env.EMAIL_USER,
+      EMAIL_PASS: !process.env.EMAIL_PASS
+    });
     return null;
   }
 
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+  try {
+    const transporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+    
+    console.log('✅ Email transporter created successfully');
+    return transporter;
+  } catch (error) {
+    console.error('❌ Failed to create email transporter:', error);
+    return null;
+  }
 };
 
 // Generate random 6-digit code
@@ -41,10 +62,11 @@ const generateLoginCode = () => {
 };
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Enhanced CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -57,10 +79,17 @@ export default async function handler(req, res) {
     });
   }
 
+  console.log('🚀 API request received:', {
+    method: req.method,
+    headers: req.headers,
+    body: req.body
+  });
+
   try {
     const { email } = req.body;
 
     if (!email) {
+      console.log('❌ No email provided');
       return res.status(400).json({
         success: false,
         message: 'Email is required'
@@ -71,14 +100,19 @@ export default async function handler(req, res) {
     const authorizedEmails = getAuthorizedEmails();
 
     console.log(`📧 Login request for: ${normalizedEmail}`);
-    console.log(`🔑 Authorized emails: ${authorizedEmails.join(', ')}`);
+    console.log(`🔑 Checking against authorized emails: ${authorizedEmails.join(', ')}`);
 
     // Check if email is authorized
     if (!authorizedEmails.includes(normalizedEmail)) {
       console.log(`🚫 Unauthorized login attempt: ${normalizedEmail}`);
       return res.status(403).json({
         success: false,
-        message: 'Email not authorized. Please contact the administrator.'
+        message: 'Email not authorized. Please contact the administrator.',
+        debug: {
+          requestedEmail: normalizedEmail,
+          authorizedEmails: authorizedEmails,
+          environment: process.env.NODE_ENV || 'unknown'
+        }
       });
     }
 
@@ -88,7 +122,12 @@ export default async function handler(req, res) {
       console.error('❌ Email transporter creation failed');
       return res.status(500).json({
         success: false,
-        message: 'Email service not configured'
+        message: 'Email service not configured',
+        debug: {
+          hasEmailService: !!process.env.EMAIL_SERVICE,
+          hasEmailUser: !!process.env.EMAIL_USER,
+          hasEmailPass: !!process.env.EMAIL_PASS
+        }
       });
     }
 
@@ -97,10 +136,17 @@ export default async function handler(req, res) {
       await transporter.verify();
       console.log('✅ Email service connection verified');
     } catch (verifyError) {
-      console.error('❌ Email service verification failed:', verifyError.message);
+      console.error('❌ Email service verification failed:', verifyError);
       return res.status(500).json({
         success: false,
-        message: 'Email service configuration error: ' + verifyError.message
+        message: 'Email service configuration error: ' + verifyError.message,
+        debug: {
+          verifyError: verifyError.message,
+          emailConfig: {
+            service: process.env.EMAIL_SERVICE,
+            user: process.env.EMAIL_USER?.substring(0, 5) + '***'
+          }
+        }
       });
     }
 
@@ -108,8 +154,6 @@ export default async function handler(req, res) {
     const code = generateLoginCode();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
 
-    // For Vercel, we'll include the code in the response for development
-    // In production, you'd store this in Redis, database, or use JWT
     console.log(`🔢 Generated code for ${normalizedEmail}: ${code}`);
 
     // Send email
@@ -126,6 +170,8 @@ export default async function handler(req, res) {
           </div>
           <p style="color: #666;">This code will expire in 10 minutes.</p>
           <p style="color: #666; font-size: 12px;">If you didn't request this code, please ignore this email.</p>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #999; font-size: 11px;">Sent from Vercel deployment at ${new Date().toISOString()}</p>
         </div>
       `
     };
@@ -137,21 +183,27 @@ export default async function handler(req, res) {
     res.json({
       success: true,
       message: 'Login code sent to your email',
-      // For development on Vercel, include code in response
-      // Remove this in production!
-      ...(process.env.NODE_ENV === 'development' && { devCode: code })
+      debug: {
+        timestamp: new Date().toISOString(),
+        environment: process.env.VERCEL ? 'vercel' : 'local',
+        codeLength: code.length
+      },
+      // For development/testing on Vercel, include code in response
+      ...(process.env.NODE_ENV !== 'production' && { devCode: code })
     });
 
   } catch (error) {
     console.error('❌ Error sending login code:', error);
-    console.error('❌ Error details:', {
-      message: error.message,
-      code: error.code,
-      command: error.command
-    });
+    console.error('❌ Error stack:', error.stack);
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to send login code: ' + error.message
+      message: 'Failed to send login code: ' + error.message,
+      debug: {
+        error: error.message,
+        stack: error.stack?.split('\n')[0],
+        timestamp: new Date().toISOString()
+      }
     });
   }
 }
