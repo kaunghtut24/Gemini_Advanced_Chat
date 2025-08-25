@@ -3,16 +3,5 @@
     "api/auth/*.js": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "AUTHORIZED_EMAILS": "@authorized_emails",
-    "EMAIL_SERVICE": "@email_service", 
-    "EMAIL_USER": "@email_user",
-    "EMAIL_PASS": "@email_pass"
-  },
-  "build": {
-    "env": {
-      "VITE_API_KEY": "@vite_api_key"
-    }
   }
 }
