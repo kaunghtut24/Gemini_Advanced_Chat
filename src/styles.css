@@ -1,3 +1,59 @@
+/* ---- MOBILE RESET AND OPTIMIZATION ----------------------- */
+/* Mobile-first responsive design optimizations */
+*, *::before, *::after {
+  box-sizing: border-box;
+  /* Improve touch scrolling performance */
+  -webkit-overflow-scrolling: touch;
+}
+
+html {
+  /* Prevent horizontal scrolling on mobile */
+  overflow-x: hidden;
+  /* Better font rendering on mobile */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* Prevent horizontal scrolling */
+  overflow-x: hidden;
+  /* Better scrolling on mobile */
+  -webkit-overflow-scrolling: touch;
+  /* Prevent iOS rubber banding */
+  overscroll-behavior: none;
+  /* Better touch interactions */
+  touch-action: manipulation;
+}
+
+/* Optimize images for mobile */
+img {
+  max-width: 100%;
+  height: auto;
+  /* Better image rendering */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Better button interactions on mobile */
+button, input, select, textarea {
+  /* Remove default iOS styling */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Better touch targets */
+  touch-action: manipulation;
+  /* Prevent zoom on iOS */
+  font-size: 16px;
+}
+
+/* Fix viewport issues on iOS */
+@supports (-webkit-touch-callout: none) {
+  .app {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+}
+
 /* ---- GLOBAL --------------------------------------------------- */
 :root {
   --primary-color: #007AFF; /* A vibrant, modern blue, iOS-like */
@@ -1479,17 +1535,69 @@ body.sidebar-open .sidebar {
   
   .app-header {
     padding: 0.875rem 1rem;
+    min-height: 56px; /* Standard mobile header height */
+    position: sticky;
+    top: 0;
+    z-index: 50;
   }
   
   .app-header h1 {
     font-size: 1.3rem;
+    /* Fix for webkit text rendering issues on mobile */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  .header-left {
+    gap: 0.75rem;
+  }
+
+  .header-right {
+    gap: 0.5rem;
   }
 }
 
 /* Mobile Styles (768px and below) */
 @media (max-width: 768px) {
+  /* Ensure proper touch targets and visibility */
+  * {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+
+  body {
+    /* Prevent body scrolling when sidebar is open */
+    overflow-x: hidden;
+  }
+
   .mobile-menu-btn {
     display: flex; /* Override the hidden display */
+    min-width: 44px; /* Apple HIG minimum touch target */
+    min-height: 44px;
+  }
+
+  /* Fix header visibility issues on mobile browsers */
+  .app-header {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    /* Ensure proper rendering on mobile Safari */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    background: var(--header-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .app-header h1 {
+    /* Fix gradient text rendering on mobile */
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    /* Improve text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   
   .sidebar {
@@ -1529,6 +1637,10 @@ body.sidebar-open .sidebar {
   .app-header {
     padding: 1rem 1rem; /* More balanced padding */
     min-height: 64px; /* Slightly taller for better touch */
+    /* Better mobile browser support */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
   }
   
   .app-header h1 {
@@ -1536,6 +1648,10 @@ body.sidebar-open .sidebar {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Mobile browser text rendering fixes */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   
   .app-header .subtitle {
@@ -1885,6 +2001,100 @@ body.sidebar-open .sidebar {
   .settings-header,
   .settings-content {
     padding: 0.75rem;
+  }
+}
+
+/* Browser-specific mobile compatibility fixes */
+
+/* Chrome Mobile specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .app-header h1 {
+    /* Fix Chrome mobile gradient text rendering */
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    /* Force hardware acceleration */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  .app-header {
+    /* Fix sticky positioning in Chrome mobile */
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Firefox Mobile specific fixes */
+@supports (-moz-appearance: none) {
+  @media (max-width: 768px) {
+    .app-header {
+      /* Ensure proper visibility in Firefox mobile */
+      background: var(--header-bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .app-header h1 {
+      /* Firefox doesn't always handle gradient text well on mobile */
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      /* Fallback for better compatibility */
+      color: var(--primary-color);
+    }
+  }
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .app-header {
+    /* Fix iOS Safari viewport issues */
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    /* Prevent iOS bouncing issues */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .login-container {
+    /* Use iOS-safe viewport height */
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+  
+  input, textarea {
+    /* Prevent iOS zoom on focus */
+    font-size: 16px !important;
+  }
+}
+
+/* Android Chrome specific fixes */
+@media screen and (max-width: 768px) and (orientation: portrait) {
+  .app-header {
+    /* Fix Android Chrome header visibility */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+  }
+  
+  .main-content {
+    /* Account for fixed header */
+    padding-top: 64px;
+  }
+  
+  body.sidebar-open .app-header {
+    /* Ensure header stays visible when sidebar is open */
+    z-index: 1001;
   }
 }
 
@@ -2565,13 +2775,93 @@ body.dark-mode .user-dropdown {
 @media (max-width: 768px) {
   .login-container {
     padding: 1rem;
+    min-height: 100vh;
+    min-height: 100dvh; /* Use dynamic viewport height for mobile */
   }
 
   .login-card {
     padding: 1.5rem;
+    max-width: 100%;
+    margin: 0 auto;
+    box-shadow: var(--shadow-md);
+  }
+
+  .login-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .login-header h1 {
+    font-size: 1.375rem; /* Slightly smaller on mobile */
+    line-height: 1.3;
+  }
+
+  .login-header p {
+    font-size: 0.8rem;
+  }
+
+  .login-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 0.75rem;
+  }
+
+  .login-icon svg {
+    width: 28px;
+    height: 28px;
   }
 
   .secondary-actions {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .form-group label {
+    font-size: 0.875rem;
+  }
+
+  .form-group input {
+    padding: 0.75rem;
+    font-size: 1rem; /* Prevent zoom on iOS */
+  }
+
+  .login-button {
+    padding: 0.875rem 1.25rem;
+    font-size: 1rem;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 0.75rem;
+  }
+
+  .login-card {
+    padding: 1.25rem;
+  }
+
+  .login-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .login-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .login-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* Very small mobile devices */
+@media (max-width: 360px) {
+  .login-container {
+    padding: 0.5rem;
+  }
+
+  .login-card {
+    padding: 1rem;
   }
 }
