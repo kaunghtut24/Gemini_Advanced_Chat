@@ -384,9 +384,6 @@ const App: React.FC = () => {
                   )}
                 </div>
               </div>
-              <p className="subtitle">
-                Powered by <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">Google Gemini API</a>
-              </p>
             </header>
             <main>
               {activeSession ? (
@@ -407,6 +404,8 @@ const App: React.FC = () => {
             </main>
             <footer className="app-footer">
               <small>
+                Powered by <a href="https://ai.google.dev/gemini-api" target="_blank" rel="noopener noreferrer">Google Gemini API</a>
+                {" • "}
                 © {new Date().getFullYear()} <a href="https://github.com/google/generative-ai-docs" target="_blank" rel="noopener noreferrer">
                   Open-Source Chat Demo
                 </a>
