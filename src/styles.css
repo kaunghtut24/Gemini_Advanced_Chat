@@ -161,7 +161,7 @@ body {
 }
 
 .mobile-menu-btn {
-  display: none;
+  display: none; /* Hidden by default on desktop */
   background: none;
   border: none;
   font-size: 1.5rem;
@@ -169,12 +169,13 @@ body {
   color: var(--text-primary);
   padding: 0.75rem; /* Larger touch target */
   border-radius: var(--border-radius-sm);
-  transition: background-color var(--transition-fast);
+  transition: all var(--transition-fast);
   min-width: 44px; /* Minimum touch target size */
   min-height: 44px;
-  display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1001; /* Ensure it's above sidebar */
 }
 
 .mobile-menu-btn:hover {
@@ -1570,9 +1571,17 @@ body.sidebar-open .sidebar {
   }
 
   .mobile-menu-btn {
-    display: flex; /* Override the hidden display */
+    display: flex !important; /* Force visible on mobile */
     min-width: 44px; /* Apple HIG minimum touch target */
     min-height: 44px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: var(--border-radius-sm);
+    z-index: 1001; /* Above sidebar and overlay */
+  }
+
+  .mobile-menu-btn:active {
+    background: rgba(0, 0, 0, 0.15);
+    transform: scale(0.95);
   }
 
   /* Fix header visibility issues on mobile browsers */

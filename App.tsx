@@ -354,8 +354,8 @@ const App: React.FC = () => {
           <div className="main-content">
             <header className="app-header">
               <div className="header-left">
-                <button className="mobile-menu-btn" onClick={toggleMobileMenu}>
-                  ☰
+                <button className="mobile-menu-btn" onClick={toggleMobileMenu} title="Toggle sidebar">
+                  <Icons.MenuIcon />
                 </button>
                 <h1>🚀 Gemini Advanced Chat</h1>
               </div>
