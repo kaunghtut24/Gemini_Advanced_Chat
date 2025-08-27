@@ -1507,12 +1507,49 @@ main {
     cursor: pointer;
     gap: 0.5rem;
     color: var(--text-secondary);
+    position: relative;
 }
-.web-search-toggle input {
-    accent-color: var(--primary-color);
+
+/* Custom checkbox styling for better visibility */
+.web-search-toggle input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    transition: all 0.2s ease;
 }
+
+.web-search-toggle input[type="checkbox"]:hover {
+    border-color: var(--primary-color);
+}
+
+.web-search-toggle input[type="checkbox"]:checked {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.web-search-toggle input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+}
+
 .web-search-toggle span {
     font-weight: 500;
+    user-select: none;
 }
 
 
@@ -1700,6 +1737,22 @@ body.sidebar-open .sidebar {
   
   .composer-container {
     padding: 0.75rem 1rem;
+  }
+
+  /* Enhanced web search toggle for mobile */
+  .web-search-toggle {
+    padding: 0 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .web-search-toggle input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    border-width: 2px;
+  }
+
+  .web-search-toggle input[type="checkbox"]:checked::after {
+    font-size: 14px;
   }
   
   .settings-panel {
