@@ -394,6 +394,7 @@ const App: React.FC = () => {
                   currentModel={currentModel}
                   sessionTitle={activeSession.title}
                   onTitleUpdate={(title) => renameSession(activeSession.id, title)}
+                  apiKey={apiKey}
                 />
               ) : (
                  <div className="no-chat-selected">

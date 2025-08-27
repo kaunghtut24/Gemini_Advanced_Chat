@@ -23,7 +23,7 @@ const Settings: React.FC<SettingsProps> = ({ apiKey, onApiKeyChange, onClose }) 
     
     try {
       console.log('🚀 Starting model tests from Settings panel...');
-      const results = await testAllModels();
+      const results = await testAllModels(newApiKey);
       setTestResults(results);
     } catch (error) {
       console.error('❌ Model testing failed:', error);
@@ -38,7 +38,7 @@ const Settings: React.FC<SettingsProps> = ({ apiKey, onApiKeyChange, onClose }) 
     
     try {
       console.log('🔬 Starting comprehensive model tests...');
-      const { regular, streaming } = await runComprehensiveTest();
+      const { regular, streaming } = await runComprehensiveTest(newApiKey);
       setTestResults(regular);
     } catch (error) {
       console.error('❌ Comprehensive testing failed:', error);

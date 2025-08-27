@@ -73,6 +73,7 @@ interface ChatWindowProps {
     currentModel?: string;
     sessionTitle?: string;
     onTitleUpdate?: (title: string) => void;
+    apiKey?: string;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ 
@@ -80,7 +81,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onMessagesUpdate, 
   currentModel, 
   sessionTitle, 
-  onTitleUpdate 
+  onTitleUpdate,
+  apiKey
 }) => {
   const [messages, setMessages] = useState<Message[]>(sessionMessages);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>(sessionMessages);
@@ -189,7 +191,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const historyForAPI = messagesWithoutLastAssistant;
 
     try {
-      const stream = generateResponseStream(historyForAPI, lastUserMessage.content, [], useWebSearch);
+      const stream = generateResponseStream(historyForAPI, lastUserMessage.content, [], useWebSearch, apiKey);
       
       for await (const chunk of stream) {
         setMessages(prev => {
@@ -261,7 +263,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (sessionTitle === 'New Chat' && onTitleUpdate && messages.filter(m => m.role === Role.USER).length === 0) {
       // This is the first user message, auto-generate title immediately
       console.log(`🚀 Triggering immediate auto-title for first message: "${currentInput}"`);
-      generateTitle(currentInput)
+      generateTitle(currentInput, apiKey)
         .then(title => {
           console.log(`🏷️ Auto-generated title: "${title}"`);
           onTitleUpdate(title);
@@ -297,7 +299,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
 
     try {
-      const stream = generateResponseStream(historyForAPI, currentInput, currentFiles, useWebSearch);
+      const stream = generateResponseStream(historyForAPI, currentInput, currentFiles, useWebSearch, apiKey);
       
       for await (const chunk of stream) {
         setMessages(prev => {

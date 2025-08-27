@@ -1,12 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = import.meta.env.VITE_API_KEY;
-
-if (!apiKey) {
-  throw new Error('VITE_API_KEY environment variable is not set.');
+// Function to get GoogleGenAI instance with proper API key
+function getGoogleGenAI(apiKey?: string): GoogleGenAI {
+  const envApiKey = import.meta.env.VITE_API_KEY;
+  const keyToUse = apiKey || envApiKey;
+  
+  if (!keyToUse) {
+    throw new Error('No API key provided. Please set VITE_API_KEY environment variable or provide an API key in settings.');
+  }
+  
+  return new GoogleGenAI({ apiKey: keyToUse });
 }
-
-const ai = new GoogleGenAI({ apiKey });
 
 export interface ModelTestResult {
   model: string;
@@ -30,9 +34,10 @@ const TEST_QUERY = "Hi";
 /**
  * Test a single model with a minimal query
  */
-export async function testSingleModel(model: string): Promise<ModelTestResult> {
+export async function testSingleModel(model: string, apiKey?: string): Promise<ModelTestResult> {
   console.log(`🧪 Testing model: ${model}`);
   const startTime = Date.now();
+  const ai = getGoogleGenAI(apiKey);
   
   try {
     const response = await ai.models.generateContent({
@@ -88,7 +93,7 @@ export async function testSingleModel(model: string): Promise<ModelTestResult> {
 /**
  * Test all available models
  */
-export async function testAllModels(): Promise<ModelTestResult[]> {
+export async function testAllModels(apiKey?: string): Promise<ModelTestResult[]> {
   console.log(`🚀 Starting comprehensive model test...`);
   console.log(`📝 Test query: "${TEST_QUERY}"`);
   console.log(`🎯 Models to test: ${MODELS_TO_TEST.join(', ')}`);
@@ -99,7 +104,7 @@ export async function testAllModels(): Promise<ModelTestResult[]> {
   
   for (const model of MODELS_TO_TEST) {
     try {
-      const result = await testSingleModel(model);
+      const result = await testSingleModel(model, apiKey);
       results.push(result);
       
       // Small delay between tests to avoid rate limiting
@@ -145,9 +150,10 @@ export async function testAllModels(): Promise<ModelTestResult[]> {
 /**
  * Test streaming functionality for a specific model
  */
-export async function testModelStreaming(model: string): Promise<ModelTestResult> {
+export async function testModelStreaming(model: string, apiKey?: string): Promise<ModelTestResult> {
   console.log(`🌊 Testing streaming for model: ${model}`);
   const startTime = Date.now();
+  const ai = getGoogleGenAI(apiKey);
   
   try {
     let chunks = 0;
@@ -202,7 +208,7 @@ export async function testModelStreaming(model: string): Promise<ModelTestResult
 /**
  * Run comprehensive tests including regular and streaming
  */
-export async function runComprehensiveTest(): Promise<{
+export async function runComprehensiveTest(apiKey?: string): Promise<{
   regular: ModelTestResult[];
   streaming: ModelTestResult[];
 }> {
@@ -211,7 +217,7 @@ export async function runComprehensiveTest(): Promise<{
   
   // Test regular generation
   console.log(`\n📝 PHASE 1: Regular Generation Test`);
-  const regularResults = await testAllModels();
+  const regularResults = await testAllModels(apiKey);
   
   // Test streaming for available models
   console.log(`\n🌊 PHASE 2: Streaming Test`);
@@ -223,7 +229,7 @@ export async function runComprehensiveTest(): Promise<{
     console.log(`Testing streaming for available models: ${availableModels.join(', ')}`);
     
     for (const model of availableModels) {
-      const streamResult = await testModelStreaming(model);
+      const streamResult = await testModelStreaming(model, apiKey);
       streamingResults.push(streamResult);
       
       // Small delay between streaming tests

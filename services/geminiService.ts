@@ -1,15 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 import { Message, Role } from '../types';
 
-// The API key is provided via the `import.meta.env.VITE_API_KEY` environment variable.
-// This is automatically configured in Vite using .env.local file.
-const apiKey = import.meta.env.VITE_API_KEY;
+// Environment variable API key as fallback
+const envApiKey = import.meta.env.VITE_API_KEY;
 
-if (!apiKey) {
-  throw new Error('VITE_API_KEY environment variable is not set. Please check your .env.local file.');
+// Function to get GoogleGenAI instance with proper API key
+function getGoogleGenAI(apiKey?: string): GoogleGenAI {
+  const keyToUse = apiKey || envApiKey;
+  
+  if (!keyToUse) {
+    throw new Error('No API key provided. Please set VITE_API_KEY environment variable or provide an API key in settings.');
+  }
+  
+  return new GoogleGenAI({ apiKey: keyToUse });
 }
-
-const ai = new GoogleGenAI({ apiKey });
 
 let selectedModel = 'gemini-2.5-flash'; // Default model
 
@@ -25,11 +29,13 @@ export const getSelectedModel = () => {
 /**
  * Test if a model is available by making a simple API call
  * @param model The model name to test
+ * @param apiKey Optional API key to use (falls back to environment variable)
  * @returns Promise<boolean> indicating if the model is available
  */
-export async function testModelAvailability(model: string): Promise<{ available: boolean; error?: string }> {
+export async function testModelAvailability(model: string, apiKey?: string): Promise<{ available: boolean; error?: string }> {
   try {
     console.log(`Testing model availability: ${model}`);
+    const ai = getGoogleGenAI(apiKey);
     
     const testResponse = await ai.models.generateContent({
       model,
@@ -156,15 +162,18 @@ function manageContextWindow(history: Message[], maxTokens: number = 30000): Mes
  * @param prompt The user's text prompt.
  * @param files An array of files to include in the prompt.
  * @param useWebSearch A boolean indicating whether to use web search.
+ * @param apiKey Optional API key to use (falls back to environment variable).
  * @returns An async generator that yields response chunks.
  */
 export async function* generateResponseStream(
   history: Message[],
   prompt: string,
   files: File[],
-  useWebSearch: boolean
+  useWebSearch: boolean,
+  apiKey?: string
 ): AsyncGenerator<{ text?: string; sources?: any[] }> {
   const model = selectedModel; // Use the dynamically selected model
+  const ai = getGoogleGenAI(apiKey);
 
   console.log(`🤖 generateResponseStream called with:`);
   console.log(`📜 History: ${history.length} messages`);
@@ -355,10 +364,12 @@ export async function* generateResponseStream(
 /**
  * Generates a short title for a conversation.
  * @param userPrompt The first user prompt in the conversation.
+ * @param apiKey Optional API key to use (falls back to environment variable).
  * @returns A promise that resolves to a short string title.
  */
-export async function generateTitle(userPrompt: string): Promise<string> {
+export async function generateTitle(userPrompt: string, apiKey?: string): Promise<string> {
   const model = selectedModel; // Use the selected model for title generation
+  const ai = getGoogleGenAI(apiKey);
   const titlePrompt = `Generate a concise, 5-word-or-less title for the following user prompt. Speak in the same language as the prompt. Do not include quotes, asterisks, or any other formatting.
 
 Prompt: "${userPrompt}"
