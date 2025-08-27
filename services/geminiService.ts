@@ -175,6 +175,10 @@ export async function* generateResponseStream(
     console.log(`🧠 History preview:`, history.map(m => ({ role: m.role, content: m.content.substring(0, 50) + '...' })));
   }
 
+  // Declare variables at function scope for fallback access
+  let contents: any[] = [];
+  let config: any = {};
+
   try {
     const fileParts = await Promise.all(files.map(fileToGenerativePart));
 
@@ -213,7 +217,6 @@ export async function* generateResponseStream(
     console.log(`   Using integrated history: ${isLastMessageCurrentPrompt}`);
 
     // Construct the conversation history for the API call.
-    let contents;
     if (isLastMessageCurrentPrompt) {
       console.log(`✅ Using integrated history approach`);
       // If the last message is the current prompt, just use the history as-is
@@ -244,7 +247,7 @@ export async function* generateResponseStream(
     }
 
     // Configure model-specific settings
-    const config: any = {
+    config = {
       tools: useWebSearch ? [{googleSearch: {}}] : undefined,
     };
 
@@ -260,13 +263,32 @@ export async function* generateResponseStream(
     console.log(`🧠 Context: ${contents.filter(c => c.role === 'model').length} assistant messages, ${contents.filter(c => c.role === 'user').length} user messages`);
     console.log(`📋 Final contents being sent to API:`, contents.map(c => ({ role: c.role, text: c.parts[0]?.text?.substring(0, 30) + '...' })));
     
-    const stream = await ai.models.generateContentStream({
+    console.log(`🔄 Starting API stream request...`);
+    
+    // Add timeout mechanism to prevent hanging requests
+    const timeoutMs = 30000; // 30 seconds timeout
+    const streamPromise = ai.models.generateContentStream({
       model,
       contents,
       config
     });
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs);
+    });
+    
+    const stream = await Promise.race([streamPromise, timeoutPromise]) as any;
+    console.log(`✅ Stream created successfully`);
 
+    let chunkCount = 0;
+    let lastChunkTime = Date.now();
+    
     for await (const chunk of stream) {
+      chunkCount++;
+      const now = Date.now();
+      console.log(`📦 Received chunk ${chunkCount} (${now - lastChunkTime}ms since last):`, { hasText: !!chunk.text, textLength: chunk.text?.length });
+      lastChunkTime = now;
+      
       // Yield text chunks as they arrive.
       const text = chunk.text;
       if (text) {
@@ -280,12 +302,35 @@ export async function* generateResponseStream(
               .map((c: any) => c.web)
               .filter(Boolean);
           if (sources.length > 0) {
+              console.log(`📚 Found ${sources.length} sources in chunk ${chunkCount}`);
               yield { sources: sources };
           }
       }
     }
+    console.log(`🏁 Stream completed with ${chunkCount} chunks`);
   } catch (error) {
-    console.error(`Error with model ${model}:`, error);
+    console.error(`❌ Streaming error with model ${model}:`, error);
+    
+    // Try fallback to non-streaming if streaming fails
+    if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('stream'))) {
+      console.log(`🔄 Attempting fallback to non-streaming mode...`);
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config
+        });
+        
+        const text = response.text;
+        if (text) {
+          console.log(`✅ Non-streaming fallback successful`);
+          yield { text };
+          return;
+        }
+      } catch (fallbackError) {
+        console.error(`❌ Non-streaming fallback also failed:`, fallbackError);
+      }
+    }
     
     // Provide specific error messages for common issues
     if (error instanceof Error) {
@@ -297,6 +342,8 @@ export async function* generateResponseStream(
         throw new Error(`Access denied for model "${model}". Please check your API key permissions.`);
       } else if (error.message.includes('rate')) {
         throw new Error(`Rate limit exceeded for model "${model}". Please wait a moment before trying again.`);
+      } else if (error.message.includes('timeout')) {
+        throw new Error(`Request timed out for model "${model}". Please try again or use a different model.`);
       }
     }
     
