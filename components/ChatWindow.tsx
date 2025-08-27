@@ -163,10 +163,86 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
+  const handleRetry = useCallback(async () => {
+    if (isStreaming || messages.length < 2) return;
+
+    // Find the last user message and regenerate the assistant response
+    const lastAssistantIndex = messages.length - 1;
+    const lastUserIndex = messages.length - 2;
+    
+    if (messages[lastAssistantIndex]?.role !== Role.ASSISTANT || 
+        messages[lastUserIndex]?.role !== Role.USER) {
+      console.error("Cannot retry: invalid message sequence");
+      return;
+    }
+
+    const lastUserMessage = messages[lastUserIndex];
+    console.log(`🔄 Retrying response for: "${lastUserMessage.content}"`);
+
+    setIsStreaming(true);
+
+    // Remove the last assistant message and start regenerating
+    const messagesWithoutLastAssistant = messages.slice(0, -1);
+    setMessages([...messagesWithoutLastAssistant, { role: Role.ASSISTANT, content: "", sources: [] }]);
+
+    // Get history for API (excluding the empty assistant message we just added)
+    const historyForAPI = messagesWithoutLastAssistant;
+
+    try {
+      const stream = generateResponseStream(historyForAPI, lastUserMessage.content, [], useWebSearch);
+      
+      for await (const chunk of stream) {
+        setMessages(prev => {
+          const updatedMessages = [...prev];
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+          if (lastMessage && lastMessage.role === Role.ASSISTANT) {
+            if (chunk.text && chunk.text.trim()) {
+              const chunkText = chunk.text;
+              if (!lastMessage.content.endsWith(chunkText)) {
+                lastMessage.content += chunkText;
+              }
+            }
+            if (chunk.sources) {
+              const existingUris = new Set(lastMessage.sources?.map(s => s.uri) || []);
+              const newSources = chunk.sources.filter(s => !existingUris.has(s.uri));
+              lastMessage.sources = [...(lastMessage.sources || []), ...newSources];
+            }
+          }
+          
+          pendingUpdateRef.current = updatedMessages;
+          isStreamingUpdateRef.current = true;
+          return updatedMessages;
+        });
+      }
+      
+      isStreamingUpdateRef.current = false;
+      
+    } catch (error) {
+      console.error("Error retrying response:", error);
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage && lastMessage.role === Role.ASSISTANT) {
+          lastMessage.content = `⚠️ Retry failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        }
+        pendingUpdateRef.current = newMessages;
+        isStreamingUpdateRef.current = false;
+        return newMessages;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [messages, isStreaming, useWebSearch, pendingUpdateRef, isStreamingUpdateRef]);
+
   const handleSend = useCallback(async () => {
     const trimmedInput = input.trim();
-    if ((!trimmedInput && files.length === 0) || isStreaming) return;
+    if ((!trimmedInput && files.length === 0) || isStreaming) {
+      console.log('🚫 Send blocked:', { hasInput: !!trimmedInput, hasFiles: files.length > 0, isStreaming });
+      return;
+    }
 
+    console.log('🚀 Starting handleSend...');
     setIsStreaming(true);
     const currentInput = trimmedInput;
     const currentFiles = [...files];
@@ -422,9 +498,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
       
       <div className="history">
-        {filteredMessages.map((m, i) => (
-          <MessageComponent key={i} role={m.role} content={m.content} sources={m.sources} messageIndex={i} />
-        ))}
+        {filteredMessages.map((m, i) => {
+          const isLastMessage = i === filteredMessages.length - 1;
+          const isLastAssistantMessage = isLastMessage && m.role === Role.ASSISTANT;
+          
+          return (
+            <MessageComponent 
+              key={i} 
+              role={m.role} 
+              content={m.content} 
+              sources={m.sources} 
+              messageIndex={i}
+              onRetry={isLastAssistantMessage ? handleRetry : undefined}
+              isLastMessage={isLastAssistantMessage}
+            />
+          );
+        })}
         {showSpinner && (
           <div className="message assistant">
             <div className="avatar">🤖</div>

@@ -1112,6 +1112,7 @@ main {
 .message-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 0.5rem;
     margin-top: 0.5rem;
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -1149,6 +1150,33 @@ main {
     box-shadow: none;
 }
 
+.retry-btn {
+    background: var(--primary-color);
+    color: white;
+    border: 1px solid var(--primary-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.retry-btn:hover {
+    background: var(--primary-color-dark);
+    border-color: var(--primary-color-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.retry-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
 /* Make copy button always visible on mobile */
 @media (max-width: 768px) {
     .message-actions {
@@ -1156,6 +1184,11 @@ main {
     }
     
     .copy-response-btn {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .retry-btn {
         font-size: 0.75rem;
         padding: 0.3rem 0.6rem;
     }

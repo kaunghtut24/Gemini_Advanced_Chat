@@ -9,9 +9,11 @@ interface MessageProps {
   content: string;
   sources?: Source[];
   messageIndex?: number;
+  onRetry?: () => void;
+  isLastMessage?: boolean;
 }
 
-export const Message: React.FC<MessageProps> = ({ role, content, sources, messageIndex = 0 }) => {
+export const Message: React.FC<MessageProps> = ({ role, content, sources, messageIndex = 0, onRetry, isLastMessage = false }) => {
   const bubbleRef = useRef<HTMLDivElement>(null);
 
   const parsedContent = role === Role.ASSISTANT ? DOMPurify.sanitize(marked.parse(content) as string) : null;
@@ -161,6 +163,15 @@ export const Message: React.FC<MessageProps> = ({ role, content, sources, messag
               <CopyIcon />
               Copy Response
             </button>
+            {isLastMessage && onRetry && (
+              <button 
+                className="retry-btn"
+                onClick={onRetry}
+                title="Regenerate this response"
+              >
+                🔄 Retry
+              </button>
+            )}
           </div>
         )}
         {sources && sources.length > 0 && (
