@@ -460,6 +460,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             placeholder="🔍 Search messages..."
             className="search-input"
           />
+          {searchQuery.trim() && (
+            <>
+              <button 
+                className="clear-search-btn"
+                onClick={() => setSearchQuery('')}
+                title="Clear search"
+              >
+                ✕
+              </button>
+              <div className="search-results-indicator">
+                {filteredMessages.length} of {messages.length} messages
+              </div>
+            </>
+          )}
         </div>
         {currentModel && (
           <div className="model-indicator">
@@ -511,6 +525,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               messageIndex={i}
               onRetry={isLastAssistantMessage ? handleRetry : undefined}
               isLastMessage={isLastAssistantMessage}
+              searchQuery={searchQuery}
             />
           );
         })}

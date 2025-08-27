@@ -11,12 +11,34 @@ interface MessageProps {
   messageIndex?: number;
   onRetry?: () => void;
   isLastMessage?: boolean;
+  searchQuery?: string;
 }
 
-export const Message: React.FC<MessageProps> = ({ role, content, sources, messageIndex = 0, onRetry, isLastMessage = false }) => {
+export const Message: React.FC<MessageProps> = ({ role, content, sources, messageIndex = 0, onRetry, isLastMessage = false, searchQuery }) => {
   const bubbleRef = useRef<HTMLDivElement>(null);
 
-  const parsedContent = role === Role.ASSISTANT ? DOMPurify.sanitize(marked.parse(content) as string) : null;
+  // Function to highlight search terms in content
+  const highlightSearchTerms = (text: string, query: string): string => {
+    if (!query.trim()) return text;
+    
+    // Split query into individual words for better matching
+    const words = query.trim().split(/\s+/).filter(word => word.length > 0);
+    let highlightedText = text;
+    
+    words.forEach(word => {
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedWord})`, 'gi');
+      highlightedText = highlightedText.replace(regex, '<mark class="search-highlight">$1</mark>');
+    });
+    
+    return highlightedText;
+  };
+
+  const parsedContent = role === Role.ASSISTANT ? 
+    DOMPurify.sanitize(marked.parse(content) as string, { 
+      ADD_TAGS: ['mark'],
+      ADD_ATTR: ['class']
+    }) : null;
 
   // Function to convert markdown content to plain text suitable for word processors
   const convertToPlainText = (markdownContent: string): string => {
@@ -147,9 +169,17 @@ export const Message: React.FC<MessageProps> = ({ role, content, sources, messag
       <div className="bubble-container">
         <div className="bubble" ref={bubbleRef}>
           {role === Role.ASSISTANT ? (
-             <div dangerouslySetInnerHTML={{ __html: parsedContent! }}></div>
+             <div dangerouslySetInnerHTML={{ 
+               __html: searchQuery ? 
+                 highlightSearchTerms(parsedContent!, searchQuery) : 
+                 parsedContent! 
+             }}></div>
           ) : (
-            content
+            <div dangerouslySetInnerHTML={{ 
+              __html: searchQuery ? 
+                highlightSearchTerms(content, searchQuery) : 
+                content 
+            }}></div>
           )}
         </div>
         {role === Role.ASSISTANT && content && (
