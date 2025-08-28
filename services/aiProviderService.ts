@@ -135,15 +135,24 @@ export function getAvailableModels(customConfigs: ProviderConfig[] = []): ModelC
 function convertMessages(messages: Message[], provider: AIProvider): any[] {
   switch (provider) {
     case AIProvider.GEMINI:
-      return messages.map(msg => ({
-        role: msg.role === Role.USER ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      }));
+      return messages.map(msg => {
+        // Gemini doesn't have a system role, so convert system messages to user messages with special formatting
+        if (msg.role === Role.SYSTEM) {
+          return {
+            role: 'user',
+            parts: [{ text: `[SYSTEM CONTEXT] ${msg.content}` }]
+          };
+        }
+        return {
+          role: msg.role === Role.USER ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        };
+      });
 
     case AIProvider.OPENAI:
     case AIProvider.CUSTOM:
       return messages.map(msg => ({
-        role: msg.role,
+        role: msg.role, // OpenAI supports system, user, and assistant roles
         content: msg.content
       }));
 
@@ -170,7 +179,23 @@ export async function* generateResponse(
 
   // Add current prompt to messages
   const allMessages = [...messages, { role: Role.USER, content: prompt }];
-  const convertedMessages = convertMessages(allMessages, provider);
+  
+  // Add current date context to help the AI provide accurate time-sensitive information
+  const currentDate = new Date();
+  const dateContext = `Current date and time: ${currentDate.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })} (${currentDate.toISOString().split('T')[0]})`;
+  
+  // Insert date context as a system message
+  const messagesWithDateContext = [
+    { role: Role.SYSTEM, content: dateContext },
+    ...allMessages
+  ];
+  
+  const convertedMessages = convertMessages(messagesWithDateContext, provider);
 
   console.log(`🚀 Generating response with ${provider} model: ${currentModelConfig.name}`);
 
@@ -271,8 +296,16 @@ async function* generateOpenAIResponse(
           searchResults = searchResponse.results;
           
           if (searchResults.length > 0) {
-            // Add search context to the conversation with clear instructions
+            // Add search context to the conversation with clear instructions including current date
+            const currentDate = new Date();
             const searchContext = `IMPORTANT: Web search has been performed and current information is available below. You DO have access to recent web search results for this query. Please use this information to provide a comprehensive, up-to-date answer.
+
+CURRENT DATE: ${currentDate.toLocaleDateString('en-US', { 
+  weekday: 'long', 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+})} (${currentDate.toISOString().split('T')[0]})
 
 🔍 SEARCH RESULTS FOR: "${lastUserMessage.content}"
 
@@ -283,12 +316,12 @@ ${searchResults.map((result, index) =>
    `
 ).join('\n')}
 
-Based on these search results, please provide a detailed and current response. Do not claim you lack browsing access - you have current web information above.`;
+Based on these search results and the current date above, please provide a detailed and current response. Do not claim you lack browsing access - you have current web information above.`;
 
             // Insert search context before the last user message
             enhancedMessages = [
               ...messages.slice(0, -1),
-              { role: 'system', content: searchContext },
+              { role: Role.SYSTEM, content: searchContext },
               lastUserMessage
             ];
             
