@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Message as MessageComponent } from './Message';
-import { Message, Role } from '../types';
-import { generateResponseStream, generateTitle } from '../services/geminiService';
+import { Message, Role, ModelConfig, SearchProvider } from '../types';
+import { generateResponse, generateTitle, setCurrentModel } from '../services/aiProviderService';
+import { getActiveSearchProvider, getSearchProviderConfigs, setDefaultSearchProvider } from '../services/webSearchService';
 import { PaperclipIcon } from './Icons';
 
 const chatTemplates = [
@@ -70,19 +71,17 @@ const chatTemplates = [
 interface ChatWindowProps {
     sessionMessages: Message[];
     onMessagesUpdate: (messages: Message[]) => void;
-    currentModel?: string;
+    selectedModel?: ModelConfig | null;
     sessionTitle?: string;
     onTitleUpdate?: (title: string) => void;
-    apiKey?: string;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ 
   sessionMessages, 
   onMessagesUpdate, 
-  currentModel, 
+  selectedModel, 
   sessionTitle, 
-  onTitleUpdate,
-  apiKey
+  onTitleUpdate
 }) => {
   const [messages, setMessages] = useState<Message[]>(sessionMessages);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>(sessionMessages);
@@ -91,6 +90,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [currentSearchProvider, setCurrentSearchProvider] = useState<SearchProvider>(SearchProvider.GEMINI);
+  const [availableSearchProviders, setAvailableSearchProviders] = useState<SearchProvider[]>([]);
   
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +113,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       console.log('Context is ready for follow-up questions');
     }
   }, [sessionMessages]);
+
+  // Set current model when selectedModel changes
+  useEffect(() => {
+    if (selectedModel) {
+      setCurrentModel(selectedModel);
+      console.log(`🎯 ChatWindow: Set current model to ${selectedModel.name}`);
+    }
+  }, [selectedModel]);
+
+  // Load search provider configuration
+  useEffect(() => {
+    const loadSearchProviders = () => {
+      const activeProvider = getActiveSearchProvider();
+      const allProviders = getSearchProviderConfigs();
+      
+      setCurrentSearchProvider(activeProvider.provider);
+      setAvailableSearchProviders(allProviders.map(p => p.provider));
+      
+      console.log(`🔍 Active search provider: ${activeProvider.provider}`);
+    };
+    
+    loadSearchProviders();
+  }, []);
 
   // Handle search filtering
   useEffect(() => {
@@ -191,7 +215,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const historyForAPI = messagesWithoutLastAssistant;
 
     try {
-      const stream = generateResponseStream(historyForAPI, lastUserMessage.content, [], useWebSearch, apiKey);
+      const stream = generateResponse(historyForAPI, lastUserMessage.content, [], useWebSearch);
       
       for await (const chunk of stream) {
         setMessages(prev => {
@@ -263,7 +287,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (sessionTitle === 'New Chat' && onTitleUpdate && messages.filter(m => m.role === Role.USER).length === 0) {
       // This is the first user message, auto-generate title immediately
       console.log(`🚀 Triggering immediate auto-title for first message: "${currentInput}"`);
-      generateTitle(currentInput, apiKey)
+      generateTitle(currentInput)
         .then(title => {
           console.log(`🏷️ Auto-generated title: "${title}"`);
           onTitleUpdate(title);
@@ -299,7 +323,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
 
     try {
-      const stream = generateResponseStream(historyForAPI, currentInput, currentFiles, useWebSearch, apiKey);
+      const stream = generateResponse(historyForAPI, currentInput, currentFiles, useWebSearch);
       
       for await (const chunk of stream) {
         setMessages(prev => {
@@ -344,18 +368,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             
             if (error.message.includes('Unsupported file type') || error.message.includes('Unsupported MIME type')) {
               lastMessage.content = "⚠️ One or more files you uploaded are not supported. Please use supported formats: Images (JPEG, PNG, WebP, HEIC, HEIF), PDF documents, Audio (WAV, MP3, AIFF, AAC, OGG, FLAC), or Video (MP4, MPEG, MOV, AVI, FLV, MPG, WEBM, WMV, 3GPP).";
+            } else if (error.message.includes('JSON') || error.message.includes('Unexpected non-whitespace')) {
+              lastMessage.content = "⚠️ The AI provider returned an invalid response format. Please try again or check your search provider configuration in settings.";
             } else if (error.message.includes('API key')) {
-              lastMessage.content = "⚠️ API key issue. Please check your Gemini API key configuration in the settings.";
+              lastMessage.content = "⚠️ API key issue. Please check your API key configuration in the settings.";
             } else if (error.message.includes('quota') || error.message.includes('limit')) {
               lastMessage.content = "⚠️ API quota exceeded. Please try again later or switch to a different model.";
             } else if (error.message.includes('model') && error.message.includes('not found')) {
-              lastMessage.content = `⚠️ The selected model "${currentModel || 'Unknown'}" is not available. Please try switching to a different model like "gemini-2.5-flash".`;
+              lastMessage.content = `⚠️ The selected model "${selectedModel?.name || 'Unknown'}" is not available. Please try switching to a different model.`;
             } else if (error.message.includes('permission') || error.message.includes('access')) {
-              lastMessage.content = `⚠️ Access denied for model "${currentModel || 'Unknown'}". Your API key might not have access to this model. Try "gemini-2.5-flash" instead.`;
+              lastMessage.content = `⚠️ Access denied for model "${selectedModel?.name || 'Unknown'}". Your API key might not have access to this model. Try switching to a different model.`;
             } else if (error.message.includes('rate')) {
-              lastMessage.content = `⚠️ Rate limit exceeded for model "${currentModel || 'Unknown'}". Please wait a moment before trying again.`;
+              lastMessage.content = `⚠️ Rate limit exceeded for model "${selectedModel?.name || 'Unknown'}". Please wait a moment before trying again.`;
             } else {
-              lastMessage.content = `⚠️ Error with model "${currentModel || 'Unknown'}": ${error.message}`;
+              lastMessage.content = `⚠️ Error with model "${selectedModel?.name || 'Unknown'}": ${error.message}`;
             }
           } else {
             lastMessage.content = "⚠️ An unexpected error occurred. Please try again or switch to a different model.";
@@ -401,6 +427,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     'video/webm': true,
     'video/x-ms-wmv': true,
     'video/3gpp': true,
+  };
+
+  const handleSearchProviderChange = (provider: SearchProvider) => {
+    setCurrentSearchProvider(provider);
+    setDefaultSearchProvider(provider);
+    console.log(`🔍 Search provider changed to: ${provider}`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,10 +509,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </>
           )}
         </div>
-        {currentModel && (
+        {selectedModel && (
           <div className="model-indicator">
             <span className="model-label">Model:</span>
-            <span className="model-name">{currentModel}</span>
+            <span className="model-name">{selectedModel.name} ({selectedModel.provider})</span>
             <div className="context-indicator" title="Context is maintained throughout the conversation with intelligent context window management">
               <span className="context-icon">🧠</span>
               <span className="context-text">Smart Context</span>
@@ -512,6 +544,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </select>
         </div>
       </div>
+      
+      {useWebSearch && (
+        <div className="search-status-indicator">
+          <span className="search-icon">🔍</span>
+          <span className="search-text">
+            Web search active with {currentSearchProvider === SearchProvider.GEMINI ? '🤖 Gemini' : 
+                                   currentSearchProvider === SearchProvider.TAVILY ? '🔍 Tavily' : 
+                                   currentSearchProvider === SearchProvider.SERPAPI ? '🌐 SerpAPI' : currentSearchProvider}
+          </span>
+        </div>
+      )}
       
       <div className="history">
         {filteredMessages.map((m, i) => {
@@ -559,15 +602,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
 
-        <div className="web-search-toggle">
-          <label>
-            <input 
-              type="checkbox" 
-              checked={useWebSearch} 
-              onChange={(e) => setUseWebSearch(e.target.checked)}
-            />
-            <span>Search the web</span>
-          </label>
+        <div className="web-search-controls">
+          <div className={`web-search-toggle ${useWebSearch ? 'active' : ''}`}>
+            <label>
+              <input 
+                type="checkbox" 
+                checked={useWebSearch} 
+                onChange={(e) => setUseWebSearch(e.target.checked)}
+              />
+              <span>Search the web</span>
+            </label>
+          </div>
+          
+          {useWebSearch && (
+            <div className="search-provider-selector">
+              <label htmlFor="search-provider">Provider:</label>
+              <select 
+                id="search-provider"
+                value={currentSearchProvider} 
+                onChange={(e) => handleSearchProviderChange(e.target.value as SearchProvider)}
+                className="search-provider-dropdown"
+              >
+                {availableSearchProviders.map(provider => (
+                  <option key={provider} value={provider}>
+                    {provider === SearchProvider.GEMINI && '🤖 Gemini (Built-in)'}
+                    {provider === SearchProvider.TAVILY && '🔍 Tavily'}
+                    {provider === SearchProvider.SERPAPI && '🌐 SerpAPI'}
+                  </option>
+                ))}
+              </select>
+              <span className="provider-status">
+                {currentSearchProvider === SearchProvider.GEMINI ? '✅' : 
+                 currentSearchProvider === SearchProvider.TAVILY ? '🟢' : 
+                 currentSearchProvider === SearchProvider.SERPAPI ? '🔵' : '⚪'}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="composer">

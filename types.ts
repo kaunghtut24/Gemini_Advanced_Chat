@@ -21,6 +21,41 @@ export interface ChatSession {
   createdAt: number;
 }
 
+// AI Provider types
+export enum AIProvider {
+  GEMINI = 'gemini',
+  OPENAI = 'openai',
+  CUSTOM = 'custom'
+}
+
+export enum SearchProvider {
+  NONE = 'none',
+  GEMINI = 'gemini', // Built-in Gemini search
+  TAVILY = 'tavily',
+  SERPAPI = 'serpapi'
+}
+
+export interface SearchProviderConfig {
+  provider: SearchProvider;
+  apiKey?: string;
+  isDefault?: boolean;
+}
+
+export interface ProviderConfig {
+  provider: AIProvider;
+  apiKey: string;
+  baseUrl?: string; // For OpenAI-compatible providers
+  customName?: string; // Display name for custom providers
+  models: string[]; // Available models for this provider
+}
+
+export interface ModelConfig {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  providerConfig: ProviderConfig;
+}
+
 // Authentication types
 export interface AuthState {
   isAuthenticated: boolean;

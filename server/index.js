@@ -269,6 +269,46 @@ app.get('/health', (req, res) => {
   });
 });
 
+// SerpAPI proxy endpoint
+app.get('/api/serpapi/search', async (req, res) => {
+  try {
+    const { q: query, api_key: apiKey, ...otherParams } = req.query;
+    
+    if (!query || !apiKey) {
+      return res.status(400).json({
+        error: 'Missing required parameters: q (query) and api_key'
+      });
+    }
+
+    // Build SerpAPI URL
+    const serpApiUrl = new URL('https://serpapi.com/search');
+    serpApiUrl.searchParams.set('engine', 'google');
+    serpApiUrl.searchParams.set('q', query);
+    serpApiUrl.searchParams.set('api_key', apiKey);
+    serpApiUrl.searchParams.set('num', '5');
+    
+    // Add any additional parameters
+    Object.entries(otherParams).forEach(([key, value]) => {
+      if (value) serpApiUrl.searchParams.set(key, value);
+    });
+
+    console.log(`🔍 Proxying SerpAPI request: ${query}`);
+    
+    // Make request to SerpAPI
+    const response = await fetch(serpApiUrl.toString());
+    
+    if (!response.ok) {
+      throw new Error(`SerpAPI request failed: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Return the data
+    res.json(data);
+    
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Authentication server running on port ${PORT}`);

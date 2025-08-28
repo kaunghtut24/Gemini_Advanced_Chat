@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       },
       server: {
         host: true, // Enable network access
-        port: 5173, // Explicit port
+        port: 5173 // Explicit port
       },
       resolve: {
         alias: {

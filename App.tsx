@@ -4,13 +4,13 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './components/Login';
 import { useChatHistory } from './hooks/useChatHistory';
 import { useAuth } from './hooks/useAuth';
-import { generateTitle, setSelectedModel } from './services/geminiService';
+import { generateTitle } from './services/aiProviderService';
 import { testAllModels, runComprehensiveTest } from './utils/modelTester';
 import { runContextTests } from './utils/contextTester';
 import { runImportExportTests, testImportCompatibility } from './utils/importExportTester';
 import { backupSessions, saveSessionForRecovery, getSessionStats } from './utils/sessionRecovery';
 import { debugExportState, logSessionDetails } from './utils/debugExport';
-import { Message, Role, ChatSession } from './types';
+import { Message, Role, ChatSession, ModelConfig, AIProvider, ProviderConfig } from './types';
 import { Icons } from './components/Icons';
 import './src/styles.css';
 import Settings from './components/Settings';
@@ -28,10 +28,27 @@ const App: React.FC = () => {
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_API_KEY || '');
   const [showSettings, setShowSettings] = useState(false);
-  const [currentModel, setCurrentModel] = useState('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Set default model when component mounts
+  useEffect(() => {
+    if (!selectedModel) {
+      // Set a default Gemini model with minimal config
+      const defaultModel: ModelConfig = {
+        id: 'gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        provider: AIProvider.GEMINI,
+        providerConfig: {
+          provider: AIProvider.GEMINI,
+          apiKey: '', // Will be loaded from localStorage in aiProviderService
+          models: ['gemini-2.5-flash']
+        }
+      };
+      setSelectedModel(defaultModel);
+    }
+  }, [selectedModel]);
 
   // Helper function to check if a session has meaningful conversation
   const hasMeaningfulConversation = (session: ChatSession | null): boolean => {
@@ -305,10 +322,15 @@ const App: React.FC = () => {
     document.body.classList.toggle('sidebar-open');
   };
 
-  const handleModelChange = (model: string) => {
+  const handleModelChange = (model: ModelConfig) => {
     setSelectedModel(model);
-    setCurrentModel(model);
-    console.log(`Model changed to: ${model}`);
+    console.log(`Model changed to: ${model.name} (${model.provider})`);
+  };
+
+  const handleSettingsClose = () => {
+    setShowSettings(false);
+    // Trigger a storage event to refresh the sidebar models
+    window.dispatchEvent(new Event('storage'));
   };
 
   // Close mobile menu when clicking outside
@@ -331,7 +353,10 @@ const App: React.FC = () => {
       {!isAuthenticated ? (
         <Login />
       ) : showSettings ? (
-        <Settings apiKey={apiKey} onApiKeyChange={setApiKey} onClose={() => setShowSettings(false)} />
+        <Settings 
+          onClose={handleSettingsClose}
+          onModelChange={handleModelChange}
+        />
       ) : (
         <>
           <Sidebar 
@@ -349,6 +374,7 @@ const App: React.FC = () => {
             onDarkModeToggle={toggleDarkMode}
             onSettingsToggle={toggleSettings}
             isDarkMode={isDarkMode}
+            selectedModel={selectedModel}
             onModelChange={handleModelChange}
           />
           <div className="main-content">
@@ -391,10 +417,9 @@ const App: React.FC = () => {
                   key={activeSession.id}
                   sessionMessages={activeSession.messages}
                   onMessagesUpdate={handleUpdateMessages}
-                  currentModel={currentModel}
+                  selectedModel={selectedModel}
                   sessionTitle={activeSession.title}
                   onTitleUpdate={(title) => renameSession(activeSession.id, title)}
-                  apiKey={apiKey}
                 />
               ) : (
                  <div className="no-chat-selected">
