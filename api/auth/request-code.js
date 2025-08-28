@@ -3,7 +3,7 @@
  * File: /api/auth/request-code.js
  */
 
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
 
 // Get authorized emails from environment variables
 const getAuthorizedEmails = () => {
@@ -61,7 +61,7 @@ const generateLoginCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Enhanced CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

@@ -5,7 +5,8 @@
 import { AuthState, LoginCodeRequest, LoginCodeVerification, AuthResponse } from '../types';
 
 // Determine API base URL based on environment
-const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+const API_BASE = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:3001' 
   : '/api'; // Vercel API routes
 
@@ -90,7 +91,8 @@ class AuthService {
   // Request login code
   async requestLoginCode(email: string): Promise<AuthResponse> {
     // In development without backend, simulate login code request
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       console.log('⚡ Simulating login code request in development mode');
       return {
         success: true,
@@ -99,7 +101,7 @@ class AuthService {
     }
 
     try {
-      console.log('📧 Requesting login code for:', email);
+      console.log(`📧 Requesting login code for: ${email} via ${API_BASE}/auth/request-code`);
       
       const response = await fetch(`${API_BASE}/auth/request-code`, {
         method: 'POST',
@@ -109,20 +111,51 @@ class AuthService {
         body: JSON.stringify({ email } as LoginCodeRequest),
       });
 
-      const result = await response.json();
-      
+      console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
-        console.error('❌ Login code request failed:', result.message);
-      } else {
-        console.log('✅ Login code requested successfully');
+        // Try to get error details from response
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('❌ API Error:', errorData);
+        } catch (parseError) {
+          // If we can't parse JSON, get the text response
+          try {
+            const errorText = await response.text();
+            console.error('❌ Raw error response:', errorText);
+            if (errorText.includes('500')) {
+              errorMessage = 'Authentication service is currently unavailable. Please check environment configuration.';
+            }
+          } catch (textError) {
+            console.error('❌ Could not read error response');
+          }
+        }
+        
+        return {
+          success: false,
+          message: errorMessage
+        };
       }
 
+      const result = await response.json();
+      console.log('✅ Login code requested successfully');
       return result;
     } catch (error) {
       console.error('❌ Network error requesting login code:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        return {
+          success: false,
+          message: 'Cannot connect to authentication service. Please check your internet connection or try again later.'
+        };
+      }
+      
       return {
         success: false,
-        message: 'Network error. Please check your connection and try again.'
+        message: `Network error: ${errorMessage}`
       };
     }
   }
@@ -130,7 +163,8 @@ class AuthService {
   // Verify login code
   async verifyLoginCode(email: string, code: string): Promise<AuthResponse> {
     // In development without backend, simulate login code verification
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       console.log('⚡ Simulating login code verification in development mode');
       
       // Create a mock token for development
@@ -206,7 +240,8 @@ class AuthService {
     }
 
     // In development without backend, skip verification and trust local auth state
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    if (typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       console.log('⚡ Skipping session verification in development mode');
       return true;
     }
