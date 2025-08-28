@@ -153,7 +153,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Handle updates to parent component with proper debouncing
   useEffect(() => {
-    if (pendingUpdateRef.current) {
+    // Don't process updates while actively streaming to prevent infinite loops
+    if (isStreaming) {
+      return;
+    }
+    
+    if (pendingUpdateRef.current && pendingUpdateRef.current !== messages) {
       const messagesToUpdate = pendingUpdateRef.current;
       pendingUpdateRef.current = null;
 
@@ -174,7 +179,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onMessagesUpdate(messagesToUpdate);
       }
     }
-  }, [onMessagesUpdate]);
+  }, [messages, isStreaming]); // Added isStreaming to dependencies
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -394,6 +399,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       });
     } finally {
       setIsStreaming(false);
+      // Ensure final update is sent to parent after streaming completes
+      if (pendingUpdateRef.current) {
+        setTimeout(() => {
+          if (pendingUpdateRef.current) {
+            onMessagesUpdate(pendingUpdateRef.current);
+            pendingUpdateRef.current = null;
+          }
+        }, 100);
+      }
       inputRef.current?.focus();
     }
   }, [input, files, isStreaming, useWebSearch]);

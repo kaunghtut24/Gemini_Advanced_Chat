@@ -306,16 +306,34 @@ app.get('/api/serpapi/search', async (req, res) => {
     // Return the data
     res.json(data);
     
+  } catch (error) {
+    console.error('❌ SerpAPI proxy error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch search results',
+      message: error.message
+    });
   }
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Authentication server running on port ${PORT}`);
   console.log(`📧 Authorized emails: ${getAuthorizedEmails().length}`);
   
   if (!process.env.EMAIL_SERVICE) {
     console.warn('⚠️ Email service not configured. Please check environment variables.');
+  }
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Please stop the existing server or use a different port.`);
+    console.log('💡 To kill the existing server, try: npx kill-port 3001');
+    process.exit(1);
+  } else {
+    console.error('❌ Server error:', err);
+    process.exit(1);
   }
 });
 

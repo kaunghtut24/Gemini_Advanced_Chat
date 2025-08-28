@@ -271,13 +271,20 @@ async function* generateOpenAIResponse(
           searchResults = searchResponse.results;
           
           if (searchResults.length > 0) {
-            // Add search context to the conversation
-            const searchContext = `Here are some recent search results for your query:\n\n${
-              searchResults.map((result, index) => 
-                `${index + 1}. **${result.title}**\n   ${result.snippet}\n   Source: ${result.url}\n`
-              ).join('\n')
-            }\n\nPlease use this information to provide a comprehensive answer.`;
-            
+            // Add search context to the conversation with clear instructions
+            const searchContext = `IMPORTANT: Web search has been performed and current information is available below. You DO have access to recent web search results for this query. Please use this information to provide a comprehensive, up-to-date answer.
+
+🔍 SEARCH RESULTS FOR: "${lastUserMessage.content}"
+
+${searchResults.map((result, index) => 
+  `${index + 1}. **${result.title}**
+   Summary: ${result.snippet}
+   Source: ${result.url}
+   `
+).join('\n')}
+
+Based on these search results, please provide a detailed and current response. Do not claim you lack browsing access - you have current web information above.`;
+
             // Insert search context before the last user message
             enhancedMessages = [
               ...messages.slice(0, -1),
@@ -294,17 +301,42 @@ async function* generateOpenAIResponse(
     }
   }
 
-  try {
-    const stream = await ai.chat.completions.create({
-      model: modelId,
-      messages: enhancedMessages,
-      stream: true,
-      max_tokens: 4096,
-      temperature: 0.7,
-    });
+  // Check if this provider has known streaming issues
+  const hasStreamingIssues = modelId.includes('hyperbolic') || modelId.includes('gpt-oss');
+  const useStreaming = !hasStreamingIssues;
 
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
+  if (hasStreamingIssues) {
+    console.log('⚡ Using non-streaming mode for provider with known streaming issues');
+  }
+
+  try {
+    if (useStreaming) {
+      // Handle streaming response
+      const stream = await ai.chat.completions.create({
+        model: modelId,
+        messages: enhancedMessages,
+        stream: true,
+        max_tokens: 4096,
+        temperature: 0.7,
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          yield { text: content };
+        }
+      }
+    } else {
+      // Handle non-streaming response
+      const response = await ai.chat.completions.create({
+        model: modelId,
+        messages: enhancedMessages,
+        stream: false,
+        max_tokens: 4096,
+        temperature: 0.7,
+      });
+
+      const content = response.choices[0]?.message?.content;
       if (content) {
         yield { text: content };
       }
@@ -323,6 +355,12 @@ async function* generateOpenAIResponse(
     
   } catch (error) {
     console.error('❌ OpenAI streaming error:', error);
+    
+    // Special handling for specific provider issues
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('JSON') && modelId.includes('hyperbolic')) {
+      console.warn('⚠️ Hyperbolic API streaming format issue detected, using non-streaming mode');
+    }
     
     // If streaming fails, try non-streaming as fallback
     try {
@@ -352,7 +390,19 @@ async function* generateOpenAIResponse(
       }
     } catch (fallbackError) {
       console.error('❌ Non-streaming fallback also failed:', fallbackError);
-      throw fallbackError;
+      
+      // Provide helpful error message for common issues
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      
+      if (fallbackMessage.includes('500')) {
+        yield { text: `⚠️ The ${modelId} model is currently experiencing server issues (500 error). This appears to be a temporary problem with the API provider. Please try again later or switch to a different model.` };
+      } else if (fallbackMessage.includes('rate limit')) {
+        yield { text: `⚠️ Rate limit exceeded for ${modelId}. Please wait a moment before trying again.` };
+      } else if (fallbackMessage.includes('authentication') || fallbackMessage.includes('401')) {
+        yield { text: `⚠️ Authentication error with ${modelId}. Please check your API key configuration.` };
+      } else {
+        yield { text: `⚠️ Error communicating with ${modelId}: ${fallbackMessage}` };
+      }
     }
   }
 }

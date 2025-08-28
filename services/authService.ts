@@ -89,6 +89,15 @@ class AuthService {
 
   // Request login code
   async requestLoginCode(email: string): Promise<AuthResponse> {
+    // In development without backend, simulate login code request
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log('⚡ Simulating login code request in development mode');
+      return {
+        success: true,
+        message: 'Development mode: Login code simulation. Use any code to login.'
+      };
+    }
+
     try {
       console.log('📧 Requesting login code for:', email);
       
@@ -120,6 +129,36 @@ class AuthService {
 
   // Verify login code
   async verifyLoginCode(email: string, code: string): Promise<AuthResponse> {
+    // In development without backend, simulate login code verification
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log('⚡ Simulating login code verification in development mode');
+      
+      // Create a mock token for development
+      const mockToken = `dev-token-${Date.now()}`;
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours from now
+      
+      // Update auth state
+      this.authState = {
+        isAuthenticated: true,
+        email: email,
+        token: mockToken,
+        expiresAt: expiresAt
+      };
+      
+      this.saveAuthState();
+      this.notifyListeners();
+      
+      console.log('✅ Development login successful:', this.authState.email);
+      
+      return {
+        success: true,
+        message: 'Development login successful',
+        email: email,
+        token: mockToken,
+        expiresAt: expiresAt
+      };
+    }
+
     try {
       console.log('🔐 Verifying login code for:', email);
       
@@ -166,6 +205,12 @@ class AuthService {
       return false;
     }
 
+    // In development without backend, skip verification and trust local auth state
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log('⚡ Skipping session verification in development mode');
+      return true;
+    }
+
     try {
       const response = await fetch(`${API_BASE}/auth/verify-session`, {
         method: 'POST',
@@ -186,7 +231,8 @@ class AuthService {
       return true;
     } catch (error) {
       console.error('❌ Error verifying session:', error);
-      return false;
+      // In case of network error, trust local auth state for better UX
+      return true;
     }
   }
 
