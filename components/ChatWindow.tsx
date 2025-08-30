@@ -90,6 +90,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [currentSearchProvider, setCurrentSearchProvider] = useState<SearchProvider>(SearchProvider.GEMINI);
   const [availableSearchProviders, setAvailableSearchProviders] = useState<SearchProvider[]>([]);
   
@@ -263,6 +264,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       });
     } finally {
       setIsStreaming(false);
+      setIsSearching(false);
     }
   }, [messages, isStreaming, useWebSearch, pendingUpdateRef, isStreamingUpdateRef]);
 
@@ -328,6 +330,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
 
     try {
+      console.log(`🚀 Generating response with web search: ${useWebSearch}`);
+      if (useWebSearch) {
+        console.log(`🔍 Web search provider: ${currentSearchProvider}`);
+        setIsSearching(true);
+      }
       const stream = generateResponse(historyForAPI, currentInput, currentFiles, useWebSearch);
       
       for await (const chunk of stream) {
@@ -560,12 +567,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
       
       {useWebSearch && (
-        <div className="search-status-indicator">
-          <span className="search-icon">🔍</span>
+        <div className={`search-status-indicator ${isSearching ? 'searching' : ''}`}>
+          <span className="search-icon">{isSearching ? '🔄' : '🔍'}</span>
           <span className="search-text">
-            Web search active with {currentSearchProvider === SearchProvider.GEMINI ? '🤖 Gemini' : 
-                                   currentSearchProvider === SearchProvider.TAVILY ? '🔍 Tavily' : 
-                                   currentSearchProvider === SearchProvider.SERPAPI ? '🌐 SerpAPI' : currentSearchProvider}
+            {isSearching ? 'Searching the web...' :
+             `Web search active with ${currentSearchProvider === SearchProvider.GEMINI ? '🤖 Gemini' :
+                                      currentSearchProvider === SearchProvider.TAVILY ? '🔍 Tavily' :
+                                      currentSearchProvider === SearchProvider.SERPAPI ? '🌐 SerpAPI' : currentSearchProvider}`}
           </span>
         </div>
       )}

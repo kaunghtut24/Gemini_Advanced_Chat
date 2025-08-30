@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './components/Login';
 import { useChatHistory } from './hooks/useChatHistory';
 import { useAuth } from './hooks/useAuth';
-import { generateTitle } from './services/aiProviderService';
+import { generateTitle, getAvailableModels, setCurrentModel } from './services/aiProviderService';
 import { testAllModels, runComprehensiveTest } from './utils/modelTester';
 import { runContextTests } from './utils/contextTester';
 import { runImportExportTests, testImportCompatibility } from './utils/importExportTester';
@@ -35,18 +35,17 @@ const App: React.FC = () => {
   // Set default model when component mounts
   useEffect(() => {
     if (!selectedModel) {
-      // Set a default Gemini model with minimal config
-      const defaultModel: ModelConfig = {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
-        provider: AIProvider.GEMINI,
-        providerConfig: {
-          provider: AIProvider.GEMINI,
-          apiKey: '', // Will be loaded from localStorage in aiProviderService
-          models: ['gemini-2.5-flash']
-        }
-      };
-      setSelectedModel(defaultModel);
+      // Get properly configured models from aiProviderService
+      const availableModels = getAvailableModels();
+      if (availableModels.length > 0) {
+        // Select the first available model (should be Gemini with proper API key)
+        const defaultModel = availableModels[0];
+        console.log(`🎯 Setting default model: ${defaultModel.name} with API key: ${!!defaultModel.providerConfig.apiKey}`);
+        setSelectedModel(defaultModel);
+        setCurrentModel(defaultModel); // Also set it in the aiProviderService
+      } else {
+        console.warn('⚠️ No available models found. Check API key configuration.');
+      }
     }
   }, [selectedModel]);
 
@@ -324,11 +323,23 @@ const App: React.FC = () => {
 
   const handleModelChange = (model: ModelConfig) => {
     setSelectedModel(model);
-    console.log(`Model changed to: ${model.name} (${model.provider})`);
+    setCurrentModel(model); // Ensure aiProviderService uses the correct model
+    console.log(`Model changed to: ${model.name} (${model.provider}) with API key: ${!!model.providerConfig.apiKey}`);
   };
 
   const handleSettingsClose = () => {
     setShowSettings(false);
+
+    // Refresh models with updated API keys
+    const availableModels = getAvailableModels();
+    if (availableModels.length > 0 && (!selectedModel || !selectedModel.providerConfig.apiKey)) {
+      // If current model doesn't have API key, switch to first available model
+      const modelWithKey = availableModels[0];
+      console.log(`🔄 Switching to model with API key: ${modelWithKey.name}`);
+      setSelectedModel(modelWithKey);
+      setCurrentModel(modelWithKey);
+    }
+
     // Trigger a storage event to refresh the sidebar models
     window.dispatchEvent(new Event('storage'));
   };

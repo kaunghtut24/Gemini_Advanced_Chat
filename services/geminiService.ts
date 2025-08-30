@@ -255,10 +255,17 @@ export async function* generateResponseStream(
       ];
     }
 
-    // Configure model-specific settings
+    // Configure model-specific settings with correct Google Search tool
     config = {
-      tools: useWebSearch ? [{googleSearch: {}}] : undefined,
+      tools: useWebSearch ? [{ googleSearch: {} }] : undefined,
     };
+
+    // Log web search configuration
+    if (useWebSearch) {
+      console.log(`🔍 Web search enabled for ${model} with Google Search tool`);
+    } else {
+      console.log(`📝 Web search disabled for ${model}`);
+    }
 
     // For Gemini 2.5 models, we may need specific configurations
     if (model.includes('2.5')) {
@@ -276,6 +283,8 @@ export async function* generateResponseStream(
     
     // Add timeout mechanism to prevent hanging requests
     const timeoutMs = 30000; // 30 seconds timeout
+
+    // Use the new SDK format for generateContentStream
     const streamPromise = ai.models.generateContentStream({
       model,
       contents,
@@ -304,16 +313,42 @@ export async function* generateResponseStream(
         yield { text };
       }
 
-      // Check for and yield grounding metadata for web search.
-      const groundingMetadata = chunk.candidates?.[0]?.groundingMetadata;
-      if (groundingMetadata?.groundingChunks) {
-          const sources = groundingMetadata.groundingChunks
-              .map((c: any) => c.web)
-              .filter(Boolean);
-          if (sources.length > 0) {
-              console.log(`📚 Found ${sources.length} sources in chunk ${chunkCount}`);
-              yield { sources: sources };
-          }
+      // Check for and yield grounding metadata for web search based on official API docs
+      const candidate = chunk.candidates?.[0];
+      const groundingMetadata = candidate?.groundingMetadata;
+
+      if (groundingMetadata) {
+        console.log(`🔍 Grounding metadata found in chunk ${chunkCount}:`, groundingMetadata);
+
+        let sources: any[] = [];
+
+        // Extract sources from groundingChunks (official format)
+        if (groundingMetadata.groundingChunks) {
+          sources = groundingMetadata.groundingChunks
+            .map((chunk: any) => {
+              if (chunk.web) {
+                return {
+                  title: chunk.web.title || 'Web Source',
+                  uri: chunk.web.uri || '#', // Use 'uri' to match Source interface
+                  snippet: chunk.web.snippet || ''
+                };
+              }
+              return null;
+            })
+            .filter(Boolean);
+        }
+
+        // Log web search queries if available
+        if (groundingMetadata.webSearchQueries) {
+          console.log(`🔍 Web search queries used:`, groundingMetadata.webSearchQueries);
+        }
+
+        if (sources.length > 0) {
+          console.log(`📚 Found ${sources.length} web sources in chunk ${chunkCount}:`, sources);
+          yield { sources: sources };
+        } else {
+          console.log(`⚠️ Grounding metadata present but no extractable sources in chunk ${chunkCount}`);
+        }
       }
     }
     console.log(`🏁 Stream completed with ${chunkCount} chunks`);

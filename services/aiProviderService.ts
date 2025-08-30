@@ -29,6 +29,91 @@ const DEFAULT_PROVIDERS: ProviderConfig[] = [
   }
 ];
 
+/**
+ * Load provider configurations from localStorage
+ */
+function getStoredProviderConfigs(): ProviderConfig[] {
+  try {
+    const stored = localStorage.getItem('aiProviders');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.providers || DEFAULT_PROVIDERS;
+    }
+  } catch (error) {
+    console.error('Error loading provider configurations:', error);
+  }
+  return DEFAULT_PROVIDERS;
+}
+
+/**
+ * Check if we're in development mode
+ */
+function isDevelopmentMode(): boolean {
+  return import.meta.env.DEV || import.meta.env.MODE === 'development';
+}
+
+/**
+ * Get merged provider configurations (default + stored + custom)
+ * In development mode, environment variables take priority over localStorage
+ */
+function getAllProviderConfigs(): ProviderConfig[] {
+  const storedConfigs = getStoredProviderConfigs();
+  const stored = localStorage.getItem('aiProviders');
+  let customConfigs: ProviderConfig[] = [];
+
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      customConfigs = parsed.customProviders || [];
+    } catch (error) {
+      console.error('Error loading custom provider configurations:', error);
+    }
+  }
+
+  const isDevMode = isDevelopmentMode();
+  console.log(`🔧 Running in ${isDevMode ? 'development' : 'production'} mode`);
+
+  // Merge stored configs with defaults, with proper priority handling
+  const mergedConfigs = DEFAULT_PROVIDERS.map(defaultConfig => {
+    const storedConfig = storedConfigs.find(c => c.provider === defaultConfig.provider);
+
+    let finalConfig: ProviderConfig;
+
+    if (isDevMode) {
+      // In development mode: Environment variables take priority over localStorage
+      finalConfig = {
+        ...defaultConfig,
+        ...(storedConfig || {}),
+        // Override with environment variable if present
+        apiKey: defaultConfig.apiKey || storedConfig?.apiKey || ''
+      };
+    } else {
+      // In production mode: localStorage takes priority over environment variables
+      finalConfig = storedConfig ? { ...defaultConfig, ...storedConfig } : defaultConfig;
+    }
+
+    const envKeyPresent = !!defaultConfig.apiKey;
+    const storedKeyPresent = !!(storedConfig?.apiKey);
+    const finalKeyPresent = !!finalConfig.apiKey;
+
+    console.log(`🔧 Provider ${defaultConfig.provider}:`);
+    console.log(`   - Environment key: ${envKeyPresent ? '✅' : '❌'}`);
+    console.log(`   - Stored key: ${storedKeyPresent ? '✅' : '❌'}`);
+    console.log(`   - Final key: ${finalKeyPresent ? '✅' : '❌'}`);
+
+    if (isDevMode && envKeyPresent && finalKeyPresent) {
+      console.log(`   🌍 Using environment variable for ${defaultConfig.provider}`);
+    } else if (storedKeyPresent && finalKeyPresent) {
+      console.log(`   💾 Using stored key for ${defaultConfig.provider}`);
+    }
+
+    return finalConfig;
+  });
+
+  console.log(`📋 Total provider configs: ${mergedConfigs.length} default + ${customConfigs.length} custom`);
+  return [...mergedConfigs, ...customConfigs];
+}
+
 // Provider instances cache
 const providerInstances = new Map<string, GoogleGenAI | OpenAI>();
 
@@ -40,8 +125,11 @@ let currentModelConfig: ModelConfig | null = null;
  */
 function getProviderInstance(config: ProviderConfig): GoogleGenAI | OpenAI {
   const cacheKey = `${config.provider}-${config.baseUrl || 'default'}`;
-  
+
+  console.log(`🔧 Getting provider instance for ${config.provider}, API key present: ${!!config.apiKey}`);
+
   if (providerInstances.has(cacheKey)) {
+    console.log(`♻️ Using cached provider instance for ${config.provider}`);
     return providerInstances.get(cacheKey)!;
   }
 
@@ -50,8 +138,10 @@ function getProviderInstance(config: ProviderConfig): GoogleGenAI | OpenAI {
   switch (config.provider) {
     case AIProvider.GEMINI:
       if (!config.apiKey) {
+        console.error(`❌ No API key found for Gemini provider. Config:`, config);
         throw new Error('Gemini API key is required');
       }
+      console.log(`✅ Creating Gemini instance with API key: ${config.apiKey.substring(0, 10)}...`);
       instance = new GoogleGenAI({ apiKey: config.apiKey });
       break;
 
@@ -100,6 +190,16 @@ export function setCurrentModel(modelConfig: ModelConfig) {
 }
 
 /**
+ * Refresh provider configurations from localStorage
+ * Call this after settings are updated
+ */
+export function refreshProviderConfigs() {
+  // Clear the provider instances cache to force reload with new API keys
+  providerInstances.clear();
+  console.log('🔄 Provider configurations refreshed');
+}
+
+/**
  * Get the current model configuration
  */
 export function getCurrentModel(): ModelConfig | null {
@@ -110,14 +210,19 @@ export function getCurrentModel(): ModelConfig | null {
  * Get available models from all configured providers
  */
 export function getAvailableModels(customConfigs: ProviderConfig[] = []): ModelConfig[] {
-  const allConfigs = [...DEFAULT_PROVIDERS, ...customConfigs];
+  const allConfigs = getAllProviderConfigs();
   const models: ModelConfig[] = [];
 
-  allConfigs.forEach(config => {
+  allConfigs.forEach((config, configIndex) => {
     if (config.apiKey) { // Only include providers with API keys
-      config.models.forEach(modelId => {
+      config.models.forEach((modelId, modelIndex) => {
+        // Create unique ID by including config index to avoid duplicates
+        const uniqueId = config.customName
+          ? `${config.provider}-${config.customName}-${modelId}-${configIndex}`
+          : `${config.provider}-${modelId}-${configIndex}`;
+
         models.push({
-          id: `${config.provider}-${modelId}`,
+          id: uniqueId,
           name: config.customName ? `${config.customName} - ${modelId}` : `${config.provider.toUpperCase()} - ${modelId}`,
           provider: config.provider,
           providerConfig: config
@@ -126,6 +231,7 @@ export function getAvailableModels(customConfigs: ProviderConfig[] = []): ModelC
     }
   });
 
+  console.log(`🔧 Available models loaded: ${models.length} models from ${allConfigs.length} providers`);
   return models;
 }
 
@@ -182,27 +288,59 @@ export async function* generateResponse(
   
   // Add current date context to help the AI provide accurate time-sensitive information
   const currentDate = new Date();
-  const dateContext = `Current date and time: ${currentDate.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateContext = `Current date and time: ${currentDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   })} (${currentDate.toISOString().split('T')[0]})`;
-  
-  // Insert date context as a system message
-  const messagesWithDateContext = [
+
+  // Add web search capability context if enabled
+  const webSearchContext = useWebSearch && provider === AIProvider.GEMINI
+    ? "IMPORTANT: You have access to real-time web search capabilities through Google Search. When users ask about current events, recent news, weather, stock prices, or any time-sensitive information, you WILL automatically search the web to provide up-to-date and accurate information. Do not say you cannot access real-time information - you can and should use web search to answer current questions. Always provide the most recent and accurate information available through web search."
+    : "";
+
+  // Insert context as system messages
+  const systemMessages = [
     { role: Role.SYSTEM, content: dateContext },
+    ...(webSearchContext ? [{ role: Role.SYSTEM, content: webSearchContext }] : [])
+  ];
+
+  const messagesWithDateContext = [
+    ...systemMessages,
     ...allMessages
   ];
   
   const convertedMessages = convertMessages(messagesWithDateContext, provider);
 
   console.log(`🚀 Generating response with ${provider} model: ${currentModelConfig.name}`);
+  console.log(`📝 Message count: ${convertedMessages.length}`);
+  console.log(`📎 File count: ${files.length}`);
+  console.log(`🔍 Web search enabled: ${useWebSearch}`);
+
+  if (useWebSearch) {
+    const activeSearchProvider = getActiveSearchProvider();
+    console.log(`🔍 Active search provider: ${activeSearchProvider.provider}`);
+    if (provider === AIProvider.GEMINI) {
+      console.log(`🤖 Using Gemini built-in web search with Google Search Retrieval tool`);
+    } else {
+      console.log(`🌐 Using external search provider: ${activeSearchProvider.provider}`);
+    }
+  }
 
   try {
     switch (provider) {
       case AIProvider.GEMINI:
-        yield* generateGeminiResponse(instance as GoogleGenAI, convertedMessages, useWebSearch);
+        try {
+          yield* generateGeminiResponse(instance as GoogleGenAI, convertedMessages, useWebSearch);
+        } catch (error) {
+          if (useWebSearch && error instanceof Error && error.message.includes('googleSearchRetrieval')) {
+            console.warn('⚠️ Web search failed, retrying without web search...');
+            yield* generateGeminiResponse(instance as GoogleGenAI, convertedMessages, false);
+          } else {
+            throw error;
+          }
+        }
         break;
 
       case AIProvider.OPENAI:
@@ -238,30 +376,131 @@ async function* generateGeminiResponse(
     maxOutputTokens: 8192,
   };
 
-  const request = {
+  // Configure web search tool based on official documentation
+  // Check if model supports Google Search tool
+  const supportsGoogleSearch = modelId.includes('2.5') || modelId.includes('2.0') || modelId.includes('1.5');
+
+  let tools = undefined;
+  if (useWebSearch) {
+    if (supportsGoogleSearch) {
+      // Use camelCase format for JavaScript SDK as per official documentation
+      tools = [{ googleSearch: {} }];
+      console.log(`✅ Model ${modelId} supports Google Search tool`);
+    } else {
+      console.warn(`⚠️ Model ${modelId} may not support Google Search tool`);
+      tools = [{ googleSearch: {} }]; // Try anyway
+    }
+  }
+
+  console.log(`🔍 Gemini request configured with web search: ${useWebSearch}`);
+  if (useWebSearch) {
+    console.log(`🛠️ Using googleSearch tool for model: ${modelId}`);
+    console.log(`📋 Tools config:`, tools);
+  }
+
+  // Use the new SDK format for generateContentStream
+  const streamPromise = ai.models.generateContentStream({
     model: modelId,
     contents: messages,
-    generationConfig,
-    tools: useWebSearch ? [{ googleSearch: {} }] : undefined,
-  };
+    config: {
+      ...generationConfig,
+      tools: tools,
+    }
+  });
 
-  const streamPromise = ai.models.generateContentStream(request);
+  console.log(`📋 Full request object:`, JSON.stringify({
+    model: modelId,
+    contents: messages,
+    config: {
+      ...generationConfig,
+      tools: tools,
+    }
+  }, null, 2));
+
   const stream = await streamPromise;
 
   for await (const chunk of stream) {
+    // Log the entire chunk structure for debugging
+    console.log(`📦 Raw chunk received:`, chunk);
+    console.log(`📦 Chunk candidates:`, chunk.candidates);
+    console.log(`📦 First candidate:`, chunk.candidates?.[0]);
+    console.log(`📦 Grounding metadata:`, chunk.candidates?.[0]?.groundingMetadata);
+
     const text = chunk.text;
     if (text && text.trim()) {
       yield { text };
     }
 
-    // Handle grounding metadata for web search
-    if ((chunk as any).groundingMetadata?.searchEntryPoints) {
-      const sources = (chunk as any).groundingMetadata.searchEntryPoints.map((entry: any) => ({
-        title: entry.renderedContent || 'Web Source',
-        uri: entry.sdkBlob || '#'
-      }));
-      yield { sources };
+    // Handle grounding metadata for web search based on official API documentation
+    // Check multiple possible locations for grounding metadata
+    const candidate = (chunk as any).candidates?.[0];
+    const groundingMetadata = candidate?.groundingMetadata || (chunk as any).groundingMetadata;
+
+    if (groundingMetadata) {
+      console.log(`🔍 Grounding metadata found:`, groundingMetadata);
+
+      let sources: any[] = [];
+
+      // Extract sources from groundingChunks (official format)
+      if (groundingMetadata.groundingChunks) {
+        sources = groundingMetadata.groundingChunks
+          .map((chunk: any) => {
+            if (chunk.web) {
+              return {
+                title: chunk.web.title || 'Web Source',
+                uri: chunk.web.uri || '#', // Use 'uri' to match Source interface
+                snippet: chunk.web.snippet || ''
+              };
+            }
+            return null;
+          })
+          .filter(Boolean);
+      }
+
+      // Log web search queries if available
+      if (groundingMetadata.webSearchQueries) {
+        console.log(`🔍 Web search queries used:`, groundingMetadata.webSearchQueries);
+      }
+
+      if (sources.length > 0) {
+        console.log(`📚 Extracted ${sources.length} web sources from grounding metadata:`, sources);
+        yield { sources };
+      } else {
+        console.log(`⚠️ Grounding metadata present but no extractable sources found`);
+      }
     }
+  }
+
+  // Check for grounding metadata in the final response
+  console.log(`🏁 Stream completed. Checking for final grounding metadata...`);
+  try {
+    const response = await stream;
+    if (response && (response as any).candidates?.[0]?.groundingMetadata) {
+      const finalGroundingMetadata = (response as any).candidates[0].groundingMetadata;
+      console.log(`🔍 Final grounding metadata found:`, finalGroundingMetadata);
+
+      if (finalGroundingMetadata.groundingChunks) {
+        const finalSources = finalGroundingMetadata.groundingChunks
+          .map((chunk: any) => {
+            if (chunk.web) {
+              return {
+                title: chunk.web.title || 'Web Source',
+                uri: chunk.web.uri || '#',
+                snippet: chunk.web.snippet || ''
+              };
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        if (finalSources.length > 0) {
+          console.log(`📚 Final sources extracted:`, finalSources);
+          yield { sources: finalSources };
+        }
+      }
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not check final response for grounding metadata:`, error);
   }
 }
 

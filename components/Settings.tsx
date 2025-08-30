@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AIProvider, ProviderConfig, ModelConfig, SearchProvider, SearchProviderConfig } from '../types';
-import { getAvailableModels, testModelAvailability, setCurrentModel, getCurrentModel } from '../services/aiProviderService';
+import { getAvailableModels, testModelAvailability, setCurrentModel, getCurrentModel, refreshProviderConfigs } from '../services/aiProviderService';
 import { 
   getSearchProviderConfigs, 
   saveSearchProviderConfigs, 
@@ -64,6 +64,15 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onModelChange }) => {
   // Current model
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(getCurrentModel());
 
+  // Check if we're in development mode
+  const isDevelopmentMode = import.meta.env.DEV || import.meta.env.MODE === 'development';
+
+  // Check which environment variables are available
+  const envKeys = {
+    gemini: import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY,
+    openai: import.meta.env.VITE_OPENAI_API_KEY
+  };
+
   useEffect(() => {
     // Load saved configurations from localStorage
     const savedProviders = localStorage.getItem('aiProviders');
@@ -76,7 +85,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onModelChange }) => {
         console.error('Error loading provider configurations:', error);
       }
     }
-    
+
     // Load search provider configurations
     setSearchProviders(getSearchProviderConfigs());
   }, []);
@@ -87,10 +96,14 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onModelChange }) => {
       customProviders
     };
     localStorage.setItem('aiProviders', JSON.stringify(config));
-    
+
     // Save search provider configurations
     saveSearchProviderConfigs(searchProviders);
-    
+
+    // Refresh provider configurations to pick up new API keys
+    refreshProviderConfigs();
+
+    console.log('💾 Settings saved and provider configurations refreshed');
     onClose();
   };
 
@@ -223,7 +236,14 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onModelChange }) => {
           <button onClick={onClose} className="close-btn">×</button>
         </div>
         <div className="settings-content">
-          
+
+          {isDevelopmentMode && (
+            <div className="dev-mode-indicator">
+              <span className="dev-icon">🔧</span>
+              <span>Development Mode - Environment variables take priority</span>
+            </div>
+          )}
+
           {/* Current Model Selection */}
           <div className="settings-section">
             <h3>Current Model</h3>
@@ -273,26 +293,44 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onModelChange }) => {
           <div className="settings-section">
             <h3>Provider API Keys</h3>
             
-            {providers.map(provider => (
-              <div key={provider.provider} className="provider-config">
-                <label>{provider.provider.toUpperCase()} API Key:</label>
-                <input
-                  type="password"
-                  value={provider.apiKey || ''}
-                  onChange={(e) => updateProviderApiKey(provider.provider, e.target.value)}
-                  className="settings-input"
-                  placeholder={`Enter your ${provider.provider} API key...`}
-                />
-                <small className="help-text">
-                  {provider.provider === AIProvider.GEMINI && (
-                    <>Get your API key from <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer">Google AI Studio</a></>
-                  )}
-                  {provider.provider === AIProvider.OPENAI && (
-                    <>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a></>
-                  )}
-                </small>
-              </div>
-            ))}
+            {providers.map(provider => {
+              const hasEnvKey = (provider.provider === AIProvider.GEMINI && envKeys.gemini) ||
+                               (provider.provider === AIProvider.OPENAI && envKeys.openai);
+              const isUsingEnvKey = isDevelopmentMode && hasEnvKey;
+
+              return (
+                <div key={provider.provider} className="provider-config">
+                  <label>
+                    {provider.provider.toUpperCase()} API Key:
+                    {isUsingEnvKey && (
+                      <span className="env-indicator">🌍 Using Environment Variable</span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    value={isUsingEnvKey ? '••••••••••••••••' : (provider.apiKey || '')}
+                    onChange={(e) => updateProviderApiKey(provider.provider, e.target.value)}
+                    className="settings-input"
+                    placeholder={isUsingEnvKey ? 'Environment variable is set' : `Enter your ${provider.provider} API key...`}
+                    disabled={isUsingEnvKey}
+                  />
+                  <small className="help-text">
+                    {isUsingEnvKey ? (
+                      <>Environment variable is active in development mode. To override, set a value here.</>
+                    ) : (
+                      <>
+                        {provider.provider === AIProvider.GEMINI && (
+                          <>Get your API key from <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer">Google AI Studio</a></>
+                        )}
+                        {provider.provider === AIProvider.OPENAI && (
+                          <>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a></>
+                        )}
+                      </>
+                    )}
+                  </small>
+                </div>
+              );
+            })}
           </div>
 
           {/* Web Search Providers */}
