@@ -17,6 +17,9 @@ import Settings from './components/Settings';
 
 const App: React.FC = () => {
   const { isAuthenticated, userEmail, logout } = useAuth();
+
+  // Check if we're in development mode
+  const isDevelopmentMode = import.meta.env.DEV && userEmail === 'dev@localhost';
   const { 
     sessions, 
     createNewSession, 
@@ -394,7 +397,14 @@ const App: React.FC = () => {
                 <button className="mobile-menu-btn" onClick={toggleMobileMenu} title="Toggle sidebar">
                   <Icons.MenuIcon />
                 </button>
-                <h1>🚀 Gemini Advanced Chat</h1>
+                <h1>
+                  🚀 Gemini Advanced Chat
+                  {isDevelopmentMode && (
+                    <span className="dev-mode-indicator" title="Development Mode - Authentication Bypassed for Local Testing">
+                      🔧 DEV
+                    </span>
+                  )}
+                </h1>
               </div>
               <div className="header-right">
                 <div className="user-menu">

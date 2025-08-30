@@ -24,6 +24,48 @@ class AuthService {
 
   constructor() {
     this.loadAuthState();
+    this.checkDevelopmentMode();
+  }
+
+  // Check if we're in development mode and bypass auth if needed
+  private checkDevelopmentMode(): void {
+    const isDevelopment = import.meta.env.DEV;
+    const isLocalhost = typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' ||
+       window.location.hostname === '127.0.0.1' ||
+       window.location.hostname.includes('192.168.') ||
+       window.location.hostname.includes('10.0.') ||
+       window.location.hostname.includes('172.'));
+
+    // Enable development bypass for local network testing
+    const enableDevBypass = isDevelopment && isLocalhost;
+
+    if (enableDevBypass && !this.authState.isAuthenticated) {
+      console.log('🔧 Development mode detected - bypassing authentication');
+      console.log(`🌐 Hostname: ${window.location.hostname}`);
+      console.log('📱 This allows mobile device testing on local network');
+      console.log('');
+      console.log('📱 MOBILE TESTING ENABLED:');
+      console.log('   ✅ Authentication bypassed for local development');
+      console.log('   ✅ Access from mobile devices on same network');
+      console.log('   ✅ No email verification required');
+      console.log('   🔧 DEV indicator shown in header');
+      console.log('');
+
+      // Create a development auth state
+      this.authState = {
+        isAuthenticated: true,
+        email: 'dev@localhost',
+        token: 'dev-token-' + Date.now(),
+        expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+      };
+
+      this.saveAuthState();
+      this.notifyListeners();
+
+      console.log('✅ Development authentication enabled');
+      console.log('📱 You can now test the app on mobile devices');
+    }
   }
 
   // Load authentication state from localStorage

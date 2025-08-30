@@ -206,6 +206,91 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dev-mode-indicator {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid #ff6b35;
+  border-radius: var(--border-radius-sm);
+  background: rgba(255, 107, 53, 0.15);
+  color: #ff6b35 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse-dev 2s infinite;
+  /* Remove gradient text that was making it invisible */
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
+  background-clip: initial !important;
+  /* Ensure maximum visibility */
+  opacity: 1 !important;
+  display: inline-block;
+  white-space: nowrap;
+  /* Additional visibility fixes */
+  text-shadow: 0 0 1px rgba(255, 107, 53, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.3);
+  /* Prevent inheritance issues */
+  font-family: inherit;
+  line-height: 1;
+}
+
+/* Mobile-specific dev indicator styles */
+@media (max-width: 768px) {
+  .dev-mode-indicator {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dev-mode-indicator {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.4rem;
+  }
+}
+
+/* Dark mode support for dev indicator */
+[data-theme="dark"] .dev-mode-indicator {
+  color: #ffa366 !important;
+  border-color: #ffa366;
+  background: rgba(255, 163, 102, 0.2);
+  text-shadow: 0 0 1px rgba(255, 163, 102, 0.5);
+}
+
+@keyframes pulse-dev {
+  0%, 100% {
+    opacity: 1;
+    background: rgba(255, 107, 53, 0.15);
+    border-color: #ff6b35;
+  }
+  50% {
+    opacity: 0.8;
+    background: rgba(255, 107, 53, 0.25);
+    border-color: #f7931e;
+  }
+}
+
+/* Dark mode pulse animation - separate keyframes */
+@keyframes pulse-dev-dark {
+  0%, 100% {
+    opacity: 1;
+    background: rgba(255, 163, 102, 0.2);
+    border-color: #ffa366;
+  }
+  50% {
+    opacity: 0.8;
+    background: rgba(255, 163, 102, 0.3);
+    border-color: #ffb380;
+  }
+}
+
+[data-theme="dark"] .dev-mode-indicator {
+  animation: pulse-dev-dark 2s infinite;
 }
 
 .app-header .subtitle {
@@ -2501,10 +2586,15 @@ body.sidebar-open .sidebar {
     left: 0;
     top: 0;
     height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height for mobile */
     width: 300px; /* Slightly wider for better usability */
     transform: translateX(-100%);
     z-index: 100;
     box-shadow: var(--shadow-lg);
+    /* Ensure proper scrolling structure on mobile */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
   
   .sidebar.collapsed {
@@ -2513,6 +2603,61 @@ body.sidebar-open .sidebar {
   
   body.sidebar-open .sidebar {
     transform: translateX(0);
+  }
+
+  /* Mobile sidebar content scrolling fixes */
+  .sidebar .sidebar-header {
+    flex-shrink: 0; /* Don't allow header to shrink */
+    padding: 1rem 1rem 0.5rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar .model-selection {
+    flex-shrink: 0; /* Don't allow model selection to shrink */
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar .new-chat-btn {
+    flex-shrink: 0; /* Don't allow new chat button to shrink */
+    margin-bottom: 0.5rem;
+  }
+
+  .sidebar .sessions-list {
+    flex: 1; /* Take remaining space */
+    overflow-y: auto; /* Enable scrolling */
+    overflow-x: hidden; /* Prevent horizontal scroll */
+    min-height: 0; /* Allow shrinking */
+    padding: 0 1rem;
+    margin: 0;
+    /* Enhanced mobile scrolling */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-padding: 0.5rem;
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar {
+    width: 8px; /* Wider for mobile touch */
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .sidebar .sidebar-footer {
+    flex-shrink: 0; /* Don't allow footer to shrink */
+    padding: 0.5rem 1rem 1rem 1rem;
+    margin-top: 0.5rem;
   }
   
   body.sidebar-open::before {
@@ -2630,6 +2775,43 @@ body.sidebar-open .sidebar {
 @media (max-width: 480px) {
   .sidebar {
     width: 280px; /* Wider than before for better usability */
+    /* Ensure proper height on small screens */
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+
+  /* Optimize sidebar content for small screens */
+  .sidebar .sidebar-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .sidebar .model-selection {
+    padding: 0.75rem;
+  }
+
+  .sidebar .new-chat-btn {
+    padding: 0.875rem;
+    font-size: 0.95rem;
+  }
+
+  .sidebar .session-item {
+    padding: 0.75rem;
+  }
+
+  .sidebar .session-title {
+    font-size: 0.9rem;
+  }
+
+  /* Improve scrolling on small screens */
+  .sidebar .sessions-list {
+    /* Add more padding for better touch scrolling */
+    padding: 0 0.75rem;
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar {
+    width: 10px; /* Even wider for small screens */
   }
   
   /* Portrait orientation optimizations */
@@ -2845,7 +3027,67 @@ body.sidebar-open .sidebar {
 @media (max-width: 360px) {
   .sidebar {
     width: 280px; /* Wider for better usability */
+    /* Ensure full height usage */
+    height: 100vh;
+    height: 100dvh;
   }
+
+  /* Compact sidebar content for very small screens */
+  .sidebar .sidebar-header {
+    padding: 0.75rem 0.75rem 0.25rem 0.75rem;
+  }
+
+  .sidebar .sidebar-header h2 {
+    font-size: 1rem;
+  }
+
+  .sidebar .model-selection {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar .new-chat-btn {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar .session-item {
+    padding: 0.625rem;
+  }
+
+  .sidebar .session-title {
+    font-size: 0.85rem;
+  }
+
+  .sidebar .sidebar-footer {
+    padding: 0.25rem 0.75rem 0.75rem 0.75rem;
+  }
+
+  /* Enhanced scrolling for very small screens */
+  .sidebar .sessions-list {
+    padding: 0 0.5rem;
+    /* Add scroll indicators for better UX */
+    background:
+      /* Top shadow */
+      linear-gradient(white 30%, rgba(255,255,255,0)) 0 0/100% 20px,
+      /* Bottom shadow */
+      linear-gradient(rgba(255,255,255,0), white 70%) 0 100%/100% 20px,
+      /* Actual background */
+      var(--sidebar-bg);
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll;
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar {
+    width: 12px; /* Maximum width for very small screens */
+  }
+
+  .sidebar .sessions-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.4); /* More visible on small screens */
+    border-radius: 6px;
+  }
+}
 
   /* Optimize chat window for very small screens */
   .chat-window {
@@ -3052,6 +3294,53 @@ body.sidebar-open .sidebar {
   .app-header {
     padding: 0.5rem 1rem;
   }
+
+  /* Optimize sidebar for landscape mobile */
+  .sidebar {
+    width: 240px; /* Narrower in landscape to save horizontal space */
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .sidebar .sidebar-header {
+    padding: 0.5rem 0.75rem 0.25rem 0.75rem;
+  }
+
+  .sidebar .sidebar-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .sidebar .model-selection {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar .new-chat-btn {
+    padding: 0.625rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar .session-item {
+    padding: 0.5rem;
+  }
+
+  .sidebar .session-title {
+    font-size: 0.8rem;
+  }
+
+  .sidebar .sidebar-footer {
+    padding: 0.25rem 0.75rem 0.5rem 0.75rem;
+  }
+
+  /* Maximize scrollable area in landscape */
+  .sidebar .sessions-list {
+    padding: 0 0.5rem;
+    /* Ensure maximum scrollable height */
+    flex: 1;
+    min-height: 0;
+  }
+}
   
   .app-header h1 {
     font-size: 1rem;
@@ -3355,9 +3644,47 @@ body.sidebar-open .sidebar {
     border-bottom: 2px solid var(--border-color); /* Thicker border for better definition */
   }
   
-  /* Improve sidebar visibility */
+  /* Improve sidebar visibility and scrolling */
   .sidebar {
     border-right: 2px solid var(--border-color); /* Thicker border */
+  }
+
+  /* Add scroll indicators for better mobile UX */
+  .sidebar .sessions-list {
+    position: relative;
+  }
+
+  .sidebar .sessions-list::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    background: linear-gradient(to bottom, var(--sidebar-bg) 0%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .sidebar .sessions-list::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    background: linear-gradient(to top, var(--sidebar-bg) 0%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* Improve touch scrolling feedback */
+  .sidebar .sessions-list {
+    scroll-behavior: smooth;
+    /* Add momentum scrolling for iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent overscroll bounce */
+    overscroll-behavior: contain;
   }
   
   /* Better touch feedback for interactive elements */
